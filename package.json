@@ -1,0 +1,22 @@
+{
+  "name": "chief-rice-trader",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Chief Rice Trader - Inventory & Sales Management System (MERN)",
+  "workspaces": [
+    "server",
+    "client"
+  ],
+  "scripts": {
+    "dev": "concurrently -n SERVER,CLIENT -c blue,green \"npm run dev -w server\" \"npm run dev -w client\"",
+    "seed": "npm run seed -w server",
+    "fix-profit": "npm run fix-profit -w server",
+    "build": "npm run build -w client",
+    "start": "npm run start -w server",
+    "reset-launch": "npm run reset-launch -w server --"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
