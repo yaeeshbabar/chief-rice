@@ -7,8 +7,9 @@ import {
   cashInStore,
   salesReport,
   profitReport,
+  asimMoney,
 } from "../controllers/reportController.js";
-import { protect } from "../middleware/auth.js";
+import { protect, requireRole } from "../middleware/auth.js";
 
 const router = express.Router();
 router.use(protect);
@@ -19,5 +20,6 @@ router.get("/khata-overview", khataOverview);
 router.get("/cash-in-store", cashInStore);
 router.get("/sales-report", salesReport);
 router.get("/profit-report", profitReport);
+router.get("/asim-money", requireRole("admin"), asimMoney);
 
 export default router;

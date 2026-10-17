@@ -165,10 +165,7 @@ const ResetPasswordModal = ({ open, onClose }) => {
 
   return (
     <Modal open={open} onClose={handleClose} title="Change password">
-      <p className="text-sm text-[var(--ink-muted)] mb-4">
-        Enter your current password, then choose a new one. If you've forgotten your current password,
-        ask Asim (admin) to reset it in the database.
-      </p>
+      <p className="text-sm text-[var(--ink-muted)] mb-4">Forgot your password? Ask the admin to set a new one.</p>
       <form onSubmit={handleSubmit} className="flex flex-col gap-3">
         <div>
           <label className="field-label">Username</label>

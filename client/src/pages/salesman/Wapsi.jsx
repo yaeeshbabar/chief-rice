@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
+import { Undo2 } from "lucide-react";
 import api from "../../api/axios.js";
 import Loader from "../../components/Loader.jsx";
+import UndoWapsiModal from "../../components/UndoWapsiModal.jsx";
 import { formatMoney, formatDateTime, formatGrams } from "../../utils/format.js";
 
 const Wapsi = () => {
@@ -21,6 +23,7 @@ const Wapsi = () => {
   const [invoiceSearch, setInvoiceSearch] = useState("");
   const [matchedInvoice, setMatchedInvoice] = useState(null);
   const [adjustCustomerBalance, setAdjustCustomerBalance] = useState(false);
+  const [undoTarget, setUndoTarget] = useState(null);
 
   const load = () => {
     setLoading(true);
@@ -85,12 +88,12 @@ const Wapsi = () => {
 
   return (
     <div className="grid lg:grid-cols-3 gap-6">
-      <h2 className="lg:col-span-3 font-display text-xl font-semibold text-[var(--ink)]">Wapsi (return)</h2>
+      <h2 className="lg:col-span-3 page-title">Wapsi (return)</h2>
       <div className="grain-card p-4 flex flex-col gap-3 h-fit">
-        <h3 className="font-display font-semibold text-[var(--color-coffee)]">Record a Wapsi (Return)</h3>
+        <h3 className="section-title">Record a return (wapsi)</h3>
         <form onSubmit={handleSubmit} className="flex flex-col gap-3">
           <div>
-            <label className="field-label">Return Type</label>
+            <label className="field-label">Return type</label>
             <div className="flex gap-2">
               <button type="button" onClick={() => setItemType("khula")} className={`flex-1 rounded-lg border py-2 text-sm font-semibold ${itemType === "khula" ? "border-[var(--color-wheat)] bg-[var(--color-cream-deep)]" : "border-[var(--color-husk)]"}`}>
                 Khula
@@ -101,7 +104,7 @@ const Wapsi = () => {
             </div>
           </div>
           <div>
-            <label className="field-label">Rice Type</label>
+            <label className="field-label">Rice type</label>
             <select className="field-input" value={riceTypeId} onChange={(e) => setRiceTypeId(e.target.value)} required>
               <option value="">Select</option>
               {riceTypes.map((rt) => (
@@ -114,7 +117,7 @@ const Wapsi = () => {
           {itemType === "bori" ? (
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="field-label">Bori Size</label>
+                <label className="field-label">Bori size</label>
                 <select className="field-input" value={boriSize} onChange={(e) => setBoriSize(Number(e.target.value))}>
                   <option value={25}>25 KG</option>
                   <option value={50}>50 KG</option>
@@ -129,11 +132,12 @@ const Wapsi = () => {
             <div>
               <label className="field-label">Quantity (grams)</label>
               <input type="number" min="1" className="field-input" value={quantityGrams} onChange={(e) => setQuantityGrams(e.target.value)} required />
+              <p className="text-xs text-[var(--ink-muted)] mt-1.5">It is added to this rice type&apos;s khula.</p>
             </div>
           )}
 
           <div>
-            <label className="field-label">Link to Invoice # (optional)</label>
+            <label className="field-label">Invoice # (optional)</label>
             <div className="flex gap-2">
               <input className="field-input" value={invoiceSearch} onChange={(e) => setInvoiceSearch(e.target.value)} placeholder="e.g. 105" />
               <button type="button" className="btn-outline" onClick={searchInvoice}>
@@ -155,7 +159,7 @@ const Wapsi = () => {
           )}
 
           <div>
-            <label className="field-label">Cash Returned (Rs)</label>
+            <label className="field-label">Cash returned (Rs)</label>
             <input type="number" min="0" className="field-input" value={cashReturned} onChange={(e) => setCashReturned(e.target.value)} />
           </div>
           <div>
@@ -165,7 +169,7 @@ const Wapsi = () => {
           {error && <p className="text-sm text-[var(--color-terracotta-deep)]">{error}</p>}
           {success && <p className="text-sm text-[var(--color-sage-deep)]">{success}</p>}
           <button className="btn-primary" disabled={saving}>
-            {saving ? "Saving..." : "Record Return"}
+            {saving ? "Saving..." : "Record return"}
           </button>
         </form>
       </div>
@@ -181,6 +185,9 @@ const Wapsi = () => {
                 <th className="py-3 px-4 font-medium">Rice</th>
                 <th className="py-3 px-4 font-medium">Qty</th>
                 <th className="py-3 px-4 font-medium text-right">Cash</th>
+                <th className="relative py-3 px-2 w-12">
+                  <span className="sr-only">Undo</span>
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--color-husk)]">
@@ -190,11 +197,16 @@ const Wapsi = () => {
                   <td className="py-2.5 px-4">{r.riceTypeName}</td>
                   <td className="py-2.5 px-4">{r.itemType === "khula" ? formatGrams(r.quantityGrams) : `${r.quantityBori} bori`}</td>
                   <td className="py-2.5 px-4 text-right font-semibold">{formatMoney(r.cashReturned)}</td>
+                  <td className="py-1 px-2">
+                    <button className="icon-btn h-8 w-8" onClick={() => setUndoTarget(r)} title="Undo this return" aria-label="Undo this return">
+                      <Undo2 size={15} />
+                    </button>
+                  </td>
                 </tr>
               ))}
               {!records.length && (
                 <tr>
-                  <td colSpan={4} className="py-8 text-center text-[var(--color-coffee-soft)]">
+                  <td colSpan={5} className="py-8 text-center text-[var(--color-coffee-soft)]">
                     No returns recorded yet
                   </td>
                 </tr>
@@ -203,6 +215,8 @@ const Wapsi = () => {
           </table>
         )}
       </div>
+
+      <UndoWapsiModal target={undoTarget} onClose={() => setUndoTarget(null)} onDone={load} />
     </div>
   );
 };

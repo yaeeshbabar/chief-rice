@@ -17,6 +17,7 @@ import bankAccountRoutes from "./routes/bankAccountRoutes.js";
 import commissionAgentRoutes from "./routes/commissionAgentRoutes.js";
 import commissionPayoutRoutes from "./routes/commissionPayoutRoutes.js";
 import reportRoutes from "./routes/reportRoutes.js";
+import changeLogRoutes from "./routes/changeLogRoutes.js";
 import { notFound, errorHandler } from "./middleware/errorHandler.js";
 
 const app = express();
@@ -42,6 +43,7 @@ app.use("/api/bank-accounts", bankAccountRoutes);
 app.use("/api/commission-agents", commissionAgentRoutes);
 app.use("/api/commission-payouts", commissionPayoutRoutes);
 app.use("/api/reports", reportRoutes);
+app.use("/api/change-log", changeLogRoutes);
 
 app.use(notFound);
 app.use(errorHandler);

@@ -4,6 +4,7 @@ import { buildCommissionSummary } from "../utils/commissionSummary.js";
 import CommissionPayout from "../models/CommissionPayout.js";
 import CommissionAgent from "../models/CommissionAgent.js";
 import { asyncHandler } from "../middleware/errorHandler.js";
+import { logChange, rs, requireReason } from "../utils/changeLog.js";
 
 export const commissionSummary = asyncHandler(async (req, res) => {
   res.json(await buildCommissionSummary());
@@ -54,4 +55,21 @@ export const listCommissionPayouts = asyncHandler(async (req, res) => {
   const payouts = await CommissionPayout.find(filter).populate("createdBy", "name role").sort({ createdAt: -1 });
   const total = payouts.reduce((sum, p) => sum + p.amount, 0);
   res.json({ payouts, total });
+});
+
+// Undo a commission handover entered by mistake: the salesman is owed it again and the
+// cash counts as back in the counter.
+export const deleteCommissionPayout = asyncHandler(async (req, res) => {
+  const reason = requireReason(req.body?.reason);
+  const payout = await CommissionPayout.findById(req.params.id);
+  if (!payout) return res.status(404).json({ message: "Commission handover not found" });
+  await payout.deleteOne();
+  await logChange(req, {
+    area: "commission",
+    action: "undo",
+    summary: `Commission handover of ${rs(payout.amount)} to ${payout.agentName} undone`,
+    reason,
+    before: payout.toObject(),
+  });
+  res.json({ message: "Commission handover undone" });
 });

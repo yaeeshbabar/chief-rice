@@ -2,13 +2,14 @@ import { useEffect, useState } from "react";
 import api from "../../api/axios.js";
 import StatCard from "../../components/StatCard.jsx";
 import Loader from "../../components/Loader.jsx";
+import KhulaContainers from "../../components/KhulaContainers.jsx";
 import { formatMoney, formatMoneyUrdu, formatGrams } from "../../utils/format.js";
 
 const ranges = [
   { key: "daily", label: "Today" },
-  { key: "weekly", label: "This Week" },
-  { key: "monthly", label: "This Month" },
-  { key: "yearly", label: "This Year" },
+  { key: "weekly", label: "This week" },
+  { key: "monthly", label: "This month" },
+  { key: "yearly", label: "This year" },
 ];
 
 const Reports = () => {
@@ -40,7 +41,7 @@ const Reports = () => {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="font-display text-xl font-semibold text-[var(--color-coffee)]">Reports</h2>
+        <h2 className="page-title">Reports</h2>
         <div className="segmented">
           {ranges.map((r) => (
             <button
@@ -57,14 +58,14 @@ const Reports = () => {
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="Total Sales" value={formatMoney(summary.totalSales)} sub={`${summary.invoiceCount} invoices`} accent="wheat" />
-        <StatCard label="Cash Sales" value={formatMoney(summary.cashSales)} accent="sage" />
-        <StatCard label="Credit Sales" value={formatMoney(summary.creditSales)} accent="terracotta" />
-        <StatCard label="Total Expense" value={formatMoney(summary.totalExpense)} accent="coffee" />
+        <StatCard label="Total sales" value={formatMoney(summary.totalSales)} sub={`${summary.invoiceCount} invoices`} accent="wheat" />
+        <StatCard label="Cash sales" value={formatMoney(summary.cashSales)} accent="sage" />
+        <StatCard label="Credit sales" value={formatMoney(summary.creditSales)} accent="terracotta" />
+        <StatCard label="Expenses" value={formatMoney(summary.totalExpense)} accent="coffee" />
       </div>
 
       <div className="grain-card p-4">
-        <h3 className="font-display font-semibold text-[var(--color-coffee)] mb-3">Expense Breakdown</h3>
+        <h3 className="section-title mb-3">Expenses by type</h3>
         <div className="flex flex-col divide-y divide-[var(--color-husk)]">
           {Object.entries(summary.expenseByCategory).map(([cat, amt]) => (
             <div key={cat} className="flex justify-between py-2 text-sm">
@@ -80,7 +81,7 @@ const Reports = () => {
 
       <div className="grain-card p-4">
         <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
-          <h3 className="font-display font-semibold text-[var(--color-coffee)]">Main Stock (Bori) Availability</h3>
+          <h3 className="section-title">Bori stock</h3>
           <select className="field-input max-w-[200px]" value={filterType} onChange={(e) => setFilterType(e.target.value)}>
             <option value="">All rice types</option>
             {riceTypes.map((rt) => (
@@ -92,11 +93,11 @@ const Reports = () => {
         </div>
         <div className="grid grid-cols-2 gap-3 mb-4">
           <div className="bg-[var(--color-cream-deep)] rounded-lg p-3">
-            <p className="text-xs text-[var(--color-coffee-soft)]">Bori in Stock</p>
+            <p className="text-xs text-[var(--color-coffee-soft)]">Bori in stock</p>
             <p className="font-display font-semibold">{visibleBags} bags</p>
           </div>
           <div className="bg-[var(--color-cream-deep)] rounded-lg p-3">
-            <p className="text-xs text-[var(--color-coffee-soft)]">Stock Value</p>
+            <p className="text-xs text-[var(--color-coffee-soft)]">Stock value</p>
             <p className="font-display font-semibold">{formatMoney(visibleValue)}</p>
             <p className="text-xs text-[var(--color-coffee-soft)]">≈ {formatMoneyUrdu(visibleValue)}</p>
           </div>
@@ -105,8 +106,8 @@ const Reports = () => {
           <table className="w-full text-sm min-w-[460px]">
             <thead>
               <tr className="text-left text-[var(--color-coffee-soft)] border-b border-[var(--color-husk)]">
-                <th className="py-2 font-medium">Rice Type</th>
-                <th className="py-2 font-medium">Bori Size</th>
+                <th className="py-2 font-medium">Rice type</th>
+                <th className="py-2 font-medium">Bori size</th>
                 <th className="py-2 font-medium">Qty</th>
                 <th className="py-2 font-medium text-right">Value</th>
               </tr>
@@ -126,20 +127,17 @@ const Reports = () => {
       </div>
 
       <div className="grain-card p-4">
-        <h3 className="font-display font-semibold text-[var(--color-coffee)] mb-3">Active Khula Batches</h3>
-        <div className="flex flex-col divide-y divide-[var(--color-husk)]">
-          {stockOverview?.khula?.map((k) => (
-            <div key={k._id} className="flex justify-between py-2 text-sm">
-              <span>
-                {k.riceType?.name} ({k.boriSize}KG)
-              </span>
-              <span className="font-semibold">{formatGrams(k.remainingGrams)} left</span>
-            </div>
-          ))}
-          {!stockOverview?.khula?.length && (
-            <p className="text-sm text-[var(--color-coffee-soft)] text-center py-6">No active Khula batches</p>
+        <div className="flex flex-wrap items-baseline justify-between gap-2 mb-4">
+          <h3 className="section-title">Khula (loose rice)</h3>
+          {stockOverview?.khulaPools?.length > 0 && (
+            <span className="text-sm text-[var(--ink-muted)]">{formatGrams(stockOverview.totalKhulaGrams)} in total</span>
           )}
         </div>
+        <KhulaContainers
+          compact
+          pools={(stockOverview?.khulaPools || []).filter((p) => !filterType || p.riceType?._id === filterType)}
+          emptyText="No khula open right now"
+        />
       </div>
     </div>
   );

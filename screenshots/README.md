@@ -12,11 +12,15 @@ then push. The main README picks it up automatically.
 | `new-sale.png` | Salesman, New sale |
 | `invoices.png` | Admin, Invoices list |
 | `invoice.png` | One invoice |
-| `profit-report.png` | Profit & commission |
+| `profit-report.png` | Profit (munafa / nuqsan) |
+| `asim-money.png` | Paid to Asim: money per bank account, cash and transfers |
 | `stock.png` | Admin, Stock |
+| `khula.png` | Salesman, Khula stock (containers per rice type) |
+| `changes.png` | Changes report, stock and other changes |
 | `login.png` | Sign in |
-| `mobile.png` | Dashboard on a phone (about 390 px wide) |
+| `mobile.png` | Profit page on a phone (about 390 px wide) |
 
 Tips:
 - Use a browser window about 1440 x 900 for desktop shots so they all match.
 - Don't include real customer phone numbers, bank account numbers or passwords in screenshots.
+- Settings shows full account numbers, so it is not used here.

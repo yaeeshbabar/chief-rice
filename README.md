@@ -43,20 +43,46 @@ business.
 
 **Stock**
 - Main stock of bori per rice type and size, with purchase price and stock value
-- Open a bori into khula and track how much is left; close it as *finished* or *over* (short)
-  to keep a record of shortage
-- **Wapsi** (returns) put rice back into stock and refund cash or reduce the customer's khata
+- **Khula per rice type**: every opened bori of a type is added together, e.g. a 25 KG and a
+  50 KG bori of Banaspati show as 75 KG. Sales take from the oldest lot first
+- Each bori is **weighed when opened**: khula gets the real weight (e.g. 24,700 g) and the
+  missing 300 g is recorded as shortfall
+- Loose rice that is already open (e.g. 10 KG outside a bori) can be added straight to khula
+- An animated container for each rice type shows how much khula is left
+- **End a batch** early when the khula is finished in real life: whatever the system still shows
+  (e.g. 750 g) is recorded as shortfall. The Khula record shows both kinds of shortfall
+- **Wapsi** (returns) put rice back into stock or khula (a 4 KG return makes 75 KG into 79 KG)
+  and refund cash or reduce the customer's khata
+
+**Corrections, with a record of every change**
+- Rename or delete a rice type (old bills and records are kept)
+- Correct or delete a stock entry that was typed wrong, and fix a bori count after counting
+- Put back a bori opened by mistake, undo a return, a cash handover or a commission handover
+- Correct or delete a khata payment and edit customer details
+- **Add, edit, delete or switch off** rice types, bank accounts and commission salesmen in Settings.
+  A deleted bank account still shows on old bills; a commission salesman can only be deleted once
+  nothing is owed to them
+- Every change asks for a reason and shows in the **Changes report**: what changed, who did it and why
 
 **Money**
 - **Khata**: every credit customer's balance, bills and payments; record full or partial payments
+- Add a creditor without a bill, with their old balance from the paper khata (warns if the same
+  name or phone is already in the khata)
 - **Expenses**: shop expenses, the owner's personal expenses and salaries
 - **Cash handling**: what is in the counter and the salesman's account, and every handover to the owner
-- **Commission** for sales agents, worked out on profit, with payouts tracked
-- **Profit & loss** report: sales, cost of rice, delivery, commission, expenses, salaries, returns
-  and the owner's take-home, by day, month or custom range
+- **Paid to Asim**: every payment that reached the owner, one by one: each bank account, cash
+  handed over and transfers from the salesman's account, with a total for each and for all together
+- **Commission** for commission salesmen, worked out on profit, with payouts tracked
+- **Profit** page made for the owner: one big profit (munafa) or loss (nuqsan) figure, a bar
+  showing where the sales money went, then each step (rice cost, delivery, commission, expenses,
+  salaries, returns, take-home), profit per rice type and per day. Today, this week, this month,
+  this year or any dates
 
 **General**
 - Separate **admin** and **salesman** panels with role-based access
+- The admin can **add logins**, rename them, switch a login off (it is signed out at once) and set
+  a new password for any login; phones still using the old password are logged out
+- Find any bill by its invoice number
 - Clean, minimal interface with **light and dark** themes, works on mobile
 - All dates and daily bill numbers follow **Pakistan time**
 
@@ -67,12 +93,16 @@ business.
 | ![Dashboard](screenshots/dashboard.png) | ![Dashboard in dark mode](screenshots/dashboard-dark.png) |
 | **New sale (salesman)** | **Invoices with bank names** |
 | ![New sale](screenshots/new-sale.png) | ![Invoices](screenshots/invoices.png) |
-| **Invoice** | **Profit & loss** |
-| ![Invoice](screenshots/invoice.png) | ![Profit and loss report](screenshots/profit-report.png) |
-| **Stock** | **Sign in** |
-| ![Stock](screenshots/stock.png) | ![Sign in](screenshots/login.png) |
+| **Invoice** | **Profit** |
+| ![Invoice](screenshots/invoice.png) | ![Profit page](screenshots/profit-report.png) |
+| **Paid to Asim** | **Stock** |
+| ![Paid to Asim](screenshots/asim-money.png) | ![Stock](screenshots/stock.png) |
+| **Khula containers** | **Changes report** |
+| ![Khula per rice type](screenshots/khula.png) | ![Changes report](screenshots/changes.png) |
+| **Sign in** | |
+| ![Sign in](screenshots/login.png) | |
 
-<p align="center"><img src="screenshots/mobile.png" width="300" alt="Mobile view" /></p>
+<p align="center"><img src="screenshots/mobile.png" width="300" alt="Profit page on a phone" /></p>
 
 ## Tech stack
 
@@ -87,7 +117,7 @@ business.
 ## Project structure
 
 ```
-chief-rice-trader/
+chief-rice/
 ├── api/
 │   └── index.js          Vercel serverless entry: runs the Express app for /api/*
 ├── client/               React frontend (Vite + Tailwind)
@@ -114,8 +144,8 @@ chief-rice-trader/
 You need **Node.js 20.19+ or 22.12+** and a **MongoDB** database (a free MongoDB Atlas cluster works).
 
 ```bash
-git clone https://github.com/yaeeshbabar/chief-rice-trader.git
-cd chief-rice-trader
+git clone https://github.com/yaeeshbabar/chief-rice.git
+cd chief-rice
 npm install
 ```
 
@@ -161,7 +191,7 @@ Set these in `server/.env` for local development, and in **Vercel > Settings > E
 | `npm run build` | Builds the frontend into `client/dist` |
 | `npm start` | Runs the API only |
 | `npm run seed` | Creates the two logins, default rice types and rent types, plus any bank accounts in `server/utils/seed-accounts.json` (kept off GitHub; see `seed-accounts.example.json`) |
-| `npm run reset-launch` | Shows what test data exists. Add `-- --yes` to clear bills, customers, payments, expenses, returns and stock movements while keeping logins and settings |
+| `npm run reset-launch` | Shows what test data exists. Add `-- --yes` to clear bills, customers, payments, expenses, returns, stock movements and change records while keeping logins and settings |
 | `npm run fix-profit` | Recalculates cost, profit and commission on existing bills from current prices |
 
 ## Deployment

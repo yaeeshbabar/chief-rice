@@ -3,6 +3,7 @@ import Expense from "../models/Expense.js";
 import Stock from "../models/Stock.js";
 import StockTransaction from "../models/StockTransaction.js";
 import { asyncHandler } from "../middleware/errorHandler.js";
+import { logChange, rs, requireReason } from "../utils/changeLog.js";
 
 const isRiceBags = (category, subCategory) => category === "Asim Kharcha Khata" && subCategory === "Rice Bags";
 
@@ -94,53 +95,85 @@ export const listExpenses = asyncHandler(async (req, res) => {
   res.json(expenses);
 });
 
-export const updateExpense = asyncHandler(async (req, res) => {
-  const { category, subCategory, amount, description, riceTypeId, boriSize, quantityBori } = req.body;
-  const expense = await Expense.findById(req.params.id);
-  if (!expense) return res.status(404).json({ message: "Expense not found" });
+const expenseText = (e) => {
+  const what = e.subCategory ? `${e.category} / ${e.subCategory}` : e.category;
+  const bags = e.relatedQuantityBori
+    ? ` (${e.relatedQuantityBori} × ${e.relatedBoriSize}KG ${e.relatedRiceType?.name || "rice"})`
+    : "";
+  return `${what} ${rs(e.amount)}${bags}`;
+};
+const expenseSnapshot = (e) => ({
+  category: e.category,
+  subCategory: e.subCategory,
+  amount: e.amount,
+  description: e.description,
+  riceTypeName: e.relatedRiceType?.name || "",
+  boriSize: e.relatedBoriSize,
+  quantityBori: e.relatedQuantityBori,
+});
+const RIDE_FROM_BILL = "This delivery cost comes from a bill. Change it by editing that bill.";
 
+export const updateExpense = asyncHandler(async (req, res) => {
+  const { category, subCategory, amount, description, riceTypeId, boriSize, quantityBori, reason } = req.body;
+  const expense = await Expense.findById(req.params.id).populate("relatedRiceType", "name");
+  if (!expense) return res.status(404).json({ message: "Expense not found" });
+  if (expense.relatedSale) return res.status(400).json({ message: RIDE_FROM_BILL });
+
+  // Check everything first, so a change that can't go through doesn't touch stock.
   const validCategories = ["Dukan Kharch Khata", "Asim Kharcha Khata", "Salary"];
   const newCategory = category || expense.category;
   const newSubCategory = subCategory !== undefined ? subCategory : expense.subCategory;
   if (category && !validCategories.includes(category)) {
     return res.status(400).json({ message: "Invalid expense category" });
   }
+  const newAmount = amount !== undefined ? Number(amount) : expense.amount;
+  if (!Number.isFinite(newAmount) || newAmount <= 0) return res.status(400).json({ message: "A valid amount is required" });
 
   const wasRiceBags = isRiceBags(expense.category, expense.subCategory);
   const isNowRiceBags = isRiceBags(newCategory, newSubCategory);
+  const oldTypeId = expense.relatedRiceType?._id || expense.relatedRiceType;
 
-  // Revert the old stock effect if it was (or is changing away from / changing quantity of) Rice Bags.
+  let finalRiceTypeId, finalBoriSize, finalQuantityBori;
+  if (isNowRiceBags) {
+    finalRiceTypeId = riceTypeId || oldTypeId;
+    finalBoriSize = Number(boriSize || expense.relatedBoriSize);
+    finalQuantityBori = quantityBori !== undefined ? Number(quantityBori) : expense.relatedQuantityBori;
+    if (!finalRiceTypeId || !finalBoriSize || !finalQuantityBori) {
+      return res.status(400).json({ message: "Select rice type, bori size and quantity for Rice Bags" });
+    }
+    const stock = await Stock.findOne({ riceType: finalRiceTypeId, boriSize: finalBoriSize });
+    const putBack =
+      wasRiceBags && String(oldTypeId) === String(finalRiceTypeId) && expense.relatedBoriSize === finalBoriSize
+        ? expense.relatedQuantityBori || 0
+        : 0;
+    const available = (stock?.quantity || 0) + putBack;
+    if (available < finalQuantityBori) {
+      return res.status(400).json({
+        message: `Not enough ${finalBoriSize}KG bori in stock to take ${finalQuantityBori} for personal use (only ${available} available)`,
+      });
+    }
+  }
+
+  const beforeText = expenseText(expense);
+  const before = expenseSnapshot(expense);
+
+  // Put back the bags of the old Rice Bags entry, then take the new amount.
   if (wasRiceBags) {
-    await restoreStockForRiceBags(
-      expense.relatedRiceType,
-      expense.relatedBoriSize,
-      expense.relatedQuantityBori,
-      req.user._id
-    );
+    await restoreStockForRiceBags(oldTypeId, expense.relatedBoriSize, expense.relatedQuantityBori, req.user._id);
     expense.relatedRiceType = undefined;
     expense.relatedBoriSize = undefined;
     expense.relatedQuantityBori = undefined;
   }
-
   if (isNowRiceBags) {
-    const finalRiceTypeId = riceTypeId || expense.relatedRiceType;
-    const finalBoriSize = boriSize || expense.relatedBoriSize;
-    const finalQuantityBori = quantityBori !== undefined ? Number(quantityBori) : expense.relatedQuantityBori;
-    if (!finalRiceTypeId || !finalBoriSize || !finalQuantityBori) {
-      return res.status(400).json({ message: "Select rice type, bori size and quantity for Rice Bags" });
-    }
     await deductStockForRiceBags(finalRiceTypeId, finalBoriSize, finalQuantityBori, req.user._id, "Rice Bags expense updated");
     expense.relatedRiceType = finalRiceTypeId;
     expense.relatedBoriSize = finalBoriSize;
     expense.relatedQuantityBori = finalQuantityBori;
   }
 
-  if (category) expense.category = category;
-  if (subCategory !== undefined) expense.subCategory = subCategory;
-  if (amount !== undefined) {
-    if (Number(amount) <= 0) return res.status(400).json({ message: "A valid amount is required" });
-    expense.amount = Number(amount);
-  }
+  expense.category = newCategory;
+  expense.subCategory = newSubCategory;
+  expense.amount = newAmount;
   if (description !== undefined) expense.description = description;
 
   await expense.save();
@@ -148,15 +181,40 @@ export const updateExpense = asyncHandler(async (req, res) => {
     { path: "createdBy", select: "name role" },
     { path: "relatedRiceType", select: "name" },
   ]);
+  const afterText = expenseText(populated);
+  if (afterText !== beforeText || before.description !== populated.description) {
+    await logChange(req, {
+      area: "expense",
+      action: "edit",
+      summary: afterText !== beforeText ? `Expense corrected: ${beforeText} → ${afterText}` : `Expense note changed: ${afterText}`,
+      reason: reason ? String(reason).trim() : "",
+      before,
+      after: expenseSnapshot(populated),
+    });
+  }
   res.json(populated);
 });
 
 export const deleteExpense = asyncHandler(async (req, res) => {
-  const expense = await Expense.findById(req.params.id);
+  const reason = requireReason(req.body?.reason);
+  const expense = await Expense.findById(req.params.id).populate("relatedRiceType", "name");
   if (!expense) return res.status(404).json({ message: "Expense not found" });
+  if (expense.relatedSale) return res.status(400).json({ message: RIDE_FROM_BILL });
   if (isRiceBags(expense.category, expense.subCategory)) {
-    await restoreStockForRiceBags(expense.relatedRiceType, expense.relatedBoriSize, expense.relatedQuantityBori, req.user._id);
+    await restoreStockForRiceBags(
+      expense.relatedRiceType?._id || expense.relatedRiceType,
+      expense.relatedBoriSize,
+      expense.relatedQuantityBori,
+      req.user._id
+    );
   }
   await expense.deleteOne();
+  await logChange(req, {
+    area: "expense",
+    action: "delete",
+    summary: `Expense deleted: ${expenseText(expense)}`,
+    reason,
+    before: expenseSnapshot(expense),
+  });
   res.json({ message: "Expense removed" });
 });

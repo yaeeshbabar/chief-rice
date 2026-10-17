@@ -11,6 +11,11 @@ export const protect = async (req, res, next) => {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const user = await User.findById(decoded.id).select("-password");
     if (!user) return res.status(401).json({ message: "User no longer exists" });
+    if (user.active === false) return res.status(401).json({ message: "This login is turned off" });
+    // Password was changed after this login: sign this device out.
+    if (user.passwordChangedAt && decoded.iat * 1000 < user.passwordChangedAt.getTime()) {
+      return res.status(401).json({ message: "Password was changed. Please log in again." });
+    }
     req.user = user;
     next();
   } catch (err) {

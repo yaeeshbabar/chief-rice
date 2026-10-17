@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { Plus } from "lucide-react";
 import api from "../../api/axios.js";
 import Loader from "../../components/Loader.jsx";
+import AddCreditorModal from "../../components/AddCreditorModal.jsx";
 import { formatMoney } from "../../utils/format.js";
 
 const Khata = () => {
@@ -9,6 +11,7 @@ const Khata = () => {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [onlyDue, setOnlyDue] = useState(true);
+  const [showAdd, setShowAdd] = useState(false);
 
   const load = (q = "") => {
     setLoading(true);
@@ -32,18 +35,24 @@ const Khata = () => {
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="font-display text-xl font-semibold text-[var(--color-coffee)]">Khata — Credit Customers</h2>
+          <h2 className="page-title">Khata</h2>
           <p className="text-sm text-[var(--color-coffee-soft)]">Total outstanding: {formatMoney(total)}</p>
         </div>
-        <form onSubmit={handleSearch} className="flex gap-2">
-          <input
-            className="field-input w-56"
-            placeholder="Search by name, shop or phone"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-          <button className="btn-outline">Search</button>
-        </form>
+        <div className="flex flex-wrap gap-2">
+          <form onSubmit={handleSearch} className="flex gap-2">
+            <input
+              className="field-input w-56"
+              placeholder="Search by name, shop or phone"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+            <button className="btn-outline">Search</button>
+          </form>
+          <button className="btn-primary" onClick={() => setShowAdd(true)}>
+            <Plus size={15} />
+            Add creditor
+          </button>
+        </div>
       </div>
 
       <label className="flex items-center gap-2 text-sm text-[var(--color-coffee-soft)] w-fit">
@@ -90,6 +99,8 @@ const Khata = () => {
           </table>
         </div>
       )}
+
+      <AddCreditorModal open={showAdd} onClose={() => setShowAdd(false)} basePath="/admin/khata" />
     </div>
   );
 };

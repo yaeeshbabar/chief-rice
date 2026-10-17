@@ -5,6 +5,8 @@ import { connectDB } from "../config/db.js";
 import Sale from "../models/Sale.js";
 import Stock from "../models/Stock.js";
 import CommissionAgent from "../models/CommissionAgent.js";
+import KhulaBatch from "../models/KhulaBatch.js";
+import { costPerKgOf } from "./khulaPools.js";
 
 // This app's profit/commission calculation was rewritten more than once while it was
 // being built. Any bill made before the current logic existed is still sitting in the
@@ -36,6 +38,14 @@ const run = async () => {
         const stock = await Stock.findOne({ riceType: item.riceType, boriSize: item.boriSize });
         purchaseCostPerUnit = stock?.lastPricePerBori || 0;
         itemCost = item.quantityBori * purchaseCostPerUnit;
+      } else if (item.itemType === "khula" && item.khulaAllocations?.length) {
+        // Sold from the type's khula: may have come from several lots (opened bori, loose, returned).
+        for (const alloc of item.khulaAllocations) {
+          const batch = await KhulaBatch.findById(alloc.batch);
+          const perKg = batch ? await costPerKgOf(batch) : alloc.costPerKg || 0;
+          itemCost += (alloc.grams / 1000) * perKg;
+        }
+        purchaseCostPerUnit = item.quantityGrams ? itemCost / (item.quantityGrams / 1000) : 0;
       } else if (item.itemType === "khula") {
         const stock = await Stock.findOne({ riceType: item.riceType, boriSize: item.boriSize });
         purchaseCostPerUnit = stock && item.boriSize ? (stock.lastPricePerBori || 0) / item.boriSize : 0;

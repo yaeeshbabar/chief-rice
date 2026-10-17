@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
+import { Undo2 } from "lucide-react";
 import api from "../api/axios.js";
 import Modal from "./Modal.jsx";
+import ReasonModal from "./ReasonModal.jsx";
 import Loader from "./Loader.jsx";
 import { formatMoney, formatDateTime } from "../utils/format.js";
 
@@ -17,6 +19,7 @@ const CommissionPanel = () => {
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [filterAgent, setFilterAgent] = useState("");
+  const [undoTarget, setUndoTarget] = useState(null);
 
   const load = () => {
     setLoading(true);
@@ -63,10 +66,8 @@ const CommissionPanel = () => {
     <div className="grain-card p-4 flex flex-col gap-4">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
-          <h3 className="font-display font-semibold text-[var(--color-coffee)]">Salesman Commission</h3>
-          <p className="text-xs text-[var(--color-coffee-soft)]">
-            Commission is collected here as bills are made. Hand it over from the cash counter when it's needed.
-          </p>
+          <h3 className="section-title">Salesman commission</h3>
+          <p className="text-xs text-[var(--color-coffee-soft)]">Builds up with each bill. Hand it over from the cash counter.</p>
         </div>
         {summary && (
           <div className="text-right">
@@ -88,8 +89,8 @@ const CommissionPanel = () => {
                 <tr className="text-left text-[var(--color-coffee-soft)] border-b border-[var(--color-husk)]">
                   <th className="py-2 font-medium">Salesman</th>
                   <th className="py-2 font-medium text-right">Earned</th>
-                  <th className="py-2 font-medium text-right">Handed Over</th>
-                  <th className="py-2 font-medium text-right">Still Owed</th>
+                  <th className="py-2 font-medium text-right">Handed over</th>
+                  <th className="py-2 font-medium text-right">Still owed</th>
                   <th className="py-2 font-medium text-right"> </th>
                 </tr>
               </thead>
@@ -114,7 +115,7 @@ const CommissionPanel = () => {
                 {!summary.agents.length && (
                   <tr>
                     <td colSpan={5} className="py-6 text-center text-[var(--color-coffee-soft)]">
-                      No commission salesmen yet — Asim adds them in Settings
+                      No commission salesmen yet. Add them in Settings.
                     </td>
                   </tr>
                 )}
@@ -135,7 +136,7 @@ const CommissionPanel = () => {
 
           <div>
             <div className="flex items-center justify-between mb-2">
-              <h4 className="text-sm font-semibold">Handover Record</h4>
+              <h4 className="text-sm font-semibold">Handover record</h4>
               <select className="field-input max-w-[180px] py-1" value={filterAgent} onChange={(e) => setFilterAgent(e.target.value)}>
                 <option value="">All salesmen</option>
                 {summary.agents.map((a) => (
@@ -157,7 +158,12 @@ const CommissionPanel = () => {
                       {p.note ? ` · ${p.note}` : ""}
                     </p>
                   </div>
-                  <span className="font-semibold">{formatMoney(p.amount)}</span>
+                  <span className="flex items-center gap-1 shrink-0">
+                    <span className="font-semibold">{formatMoney(p.amount)}</span>
+                    <button className="icon-btn h-8 w-8" onClick={() => setUndoTarget(p)} title="Undo this handover" aria-label="Undo this handover">
+                      <Undo2 size={15} />
+                    </button>
+                  </span>
                 </div>
               ))}
               {!shownPayouts.length && <p className="py-4 text-center text-[var(--color-coffee-soft)]">No commission handed over yet</p>}
@@ -166,7 +172,7 @@ const CommissionPanel = () => {
         </>
       )}
 
-      <Modal open={!!target} onClose={() => setTarget(null)} title={`Hand over commission — ${target?.name}`}>
+      <Modal open={!!target} onClose={() => setTarget(null)} title={`Commission for ${target?.name}`}>
         {target && (
           <form onSubmit={submit} className="flex flex-col gap-3">
             <p className="text-sm text-[var(--color-coffee-soft)]">
@@ -182,11 +188,32 @@ const CommissionPanel = () => {
             </div>
             {error && <p className="text-sm text-[var(--color-terracotta-deep)]">{error}</p>}
             <button className="btn-primary" disabled={saving}>
-              {saving ? "Saving..." : "Confirm Handover"}
+              {saving ? "Saving..." : "Confirm handover"}
             </button>
           </form>
         )}
       </Modal>
+
+      <ReasonModal
+        open={!!undoTarget}
+        onClose={() => setUndoTarget(null)}
+        title="Undo commission handover?"
+        confirmLabel="Undo handover"
+        danger
+        placeholder="e.g. entered for the wrong salesman"
+        onConfirm={async (reason) => {
+          await api.delete(`/commission-payouts/${undoTarget._id}`, { data: { reason } });
+          setUndoTarget(null);
+          load();
+        }}
+      >
+        {undoTarget && (
+          <p>
+            {formatMoney(undoTarget.amount)} to {undoTarget.agentName} on {formatDateTime(undoTarget.createdAt)}. {undoTarget.agentName} will be
+            owed this again and the cash counts as back in the counter.
+          </p>
+        )}
+      </ReasonModal>
     </div>
   );
 };

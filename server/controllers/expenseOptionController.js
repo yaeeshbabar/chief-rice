@@ -1,5 +1,6 @@
 import ExpenseOption from "../models/ExpenseOption.js";
 import { asyncHandler } from "../middleware/errorHandler.js";
+import { escapeRegex } from "../utils/escapeRegex.js";
 
 export const listExpenseOptions = asyncHandler(async (req, res) => {
   const { type, includeInactive } = req.query;
@@ -16,7 +17,7 @@ export const createExpenseOption = asyncHandler(async (req, res) => {
     return res.status(400).json({ message: "Invalid option type" });
   }
   if (!name || !name.trim()) return res.status(400).json({ message: "Name is required" });
-  const exists = await ExpenseOption.findOne({ type, name: new RegExp(`^${name.trim()}$`, "i") });
+  const exists = await ExpenseOption.findOne({ type, name: new RegExp(`^${escapeRegex(name.trim())}$`, "i") });
   if (exists) return res.status(400).json({ message: "This option already exists" });
   const option = await ExpenseOption.create({ type, name: name.trim() });
   res.status(201).json(option);

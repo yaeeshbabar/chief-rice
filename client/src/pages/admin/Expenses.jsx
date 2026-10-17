@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import api from "../../api/axios.js";
 import Loader from "../../components/Loader.jsx";
 import Modal from "../../components/Modal.jsx";
+import ReasonModal from "../../components/ReasonModal.jsx";
 import CommissionPanel from "../../components/CommissionPanel.jsx";
 import { formatMoney, formatDateTime } from "../../utils/format.js";
 
@@ -18,7 +19,8 @@ const Expenses = () => {
   const [newRentName, setNewRentName] = useState("");
   const [editingOption, setEditingOption] = useState(null); // { id, name }
   const [editExpense, setEditExpense] = useState(null);
-  const [editForm, setEditForm] = useState({ category: "", subCategory: "", amount: "", description: "" });
+  const [editForm, setEditForm] = useState({ category: "", subCategory: "", amount: "", description: "", reason: "" });
+  const [deleteExpense, setDeleteExpense] = useState(null);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -65,7 +67,7 @@ const Expenses = () => {
 
   const openEditExpense = (e) => {
     setError("");
-    setEditForm({ category: e.category, subCategory: e.subCategory || "", amount: e.amount, description: e.description || "" });
+    setEditForm({ category: e.category, subCategory: e.subCategory || "", amount: e.amount, description: e.description || "", reason: "" });
     setEditExpense(e);
   };
 
@@ -93,13 +95,13 @@ const Expenses = () => {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="font-display text-xl font-semibold text-[var(--color-coffee)]">Extra Expense</h2>
+        <h2 className="page-title">Expenses</h2>
         <button className="btn-outline" onClick={() => setShowOptions(true)}>
-          Manage Salary Names & Rent Types
+          Salary names &amp; rent types
         </button>
       </div>
 
-      <div className="grain-card p-4 flex flex-wrap items-end gap-3">
+      <div className="filter-bar">
         <div>
           <label className="field-label">From</label>
           <input type="date" className="field-input" value={filters.from} onChange={(e) => setFilters({ ...filters, from: e.target.value })} />
@@ -149,7 +151,7 @@ const Expenses = () => {
                 <th className="py-3 px-4 font-medium">Date</th>
                 <th className="py-3 px-4 font-medium">Category</th>
                 <th className="py-3 px-4 font-medium">Detail</th>
-                <th className="py-3 px-4 font-medium">Added By</th>
+                <th className="py-3 px-4 font-medium">Added by</th>
                 <th className="py-3 px-4 font-medium text-right">Amount</th>
                 <th className="py-3 px-4 font-medium text-right">Edit</th>
               </tr>
@@ -172,9 +174,15 @@ const Expenses = () => {
                   <td className="py-2.5 px-4">{e.createdBy?.name}</td>
                   <td className="py-2.5 px-4 text-right font-semibold">{formatMoney(e.amount)}</td>
                   <td className="py-2.5 px-4 text-right">
-                    <button className="text-xs font-semibold text-[var(--color-wheat-dark)]" onClick={() => openEditExpense(e)}>
-                      Edit
-                    </button>
+                    {e.relatedSale ? (
+                      <span className="text-xs text-[var(--ink-faint)]" title="Change it by editing the bill">
+                        From a bill
+                      </span>
+                    ) : (
+                      <button className="text-xs font-semibold text-[var(--color-wheat-dark)]" onClick={() => openEditExpense(e)}>
+                        Edit
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -190,10 +198,10 @@ const Expenses = () => {
         </div>
       )}
 
-      <Modal open={showOptions} onClose={() => setShowOptions(false)} title="Manage Dropdown Options" wide>
+      <Modal open={showOptions} onClose={() => setShowOptions(false)} title="Salary names & rent types" wide>
         <div className="grid sm:grid-cols-2 gap-6">
           <div>
-            <h4 className="font-semibold text-sm mb-2">Salary — Salesman Names</h4>
+            <h4 className="font-semibold text-sm mb-2">Salary names</h4>
             <div className="flex gap-2 mb-3">
               <input className="field-input" value={newSalaryName} onChange={(e) => setNewSalaryName(e.target.value)} placeholder="e.g. Kashif" />
               <button className="btn-primary" onClick={() => addOption("salaryPerson", newSalaryName, setNewSalaryName)}>
@@ -232,7 +240,7 @@ const Expenses = () => {
             </div>
           </div>
           <div>
-            <h4 className="font-semibold text-sm mb-2">Rent Types</h4>
+            <h4 className="font-semibold text-sm mb-2">Rent types</h4>
             <div className="flex gap-2 mb-3">
               <input className="field-input" value={newRentName} onChange={(e) => setNewRentName(e.target.value)} placeholder="e.g. House 2 Rent" />
               <button className="btn-primary" onClick={() => addOption("rentType", newRentName, setNewRentName)}>
@@ -273,7 +281,7 @@ const Expenses = () => {
         </div>
       </Modal>
 
-      <Modal open={!!editExpense} onClose={() => setEditExpense(null)} title="Edit Expense">
+      <Modal open={!!editExpense} onClose={() => setEditExpense(null)} title="Edit expense">
         {editExpense && (
           <form onSubmit={submitEditExpense} className="flex flex-col gap-3">
             <div>
@@ -285,7 +293,7 @@ const Expenses = () => {
               </select>
             </div>
             <div>
-              <label className="field-label">Detail / Sub-category</label>
+              <label className="field-label">Detail</label>
               <input className="field-input" value={editForm.subCategory} onChange={(e) => setEditForm({ ...editForm, subCategory: e.target.value })} />
             </div>
             <div>
@@ -296,13 +304,58 @@ const Expenses = () => {
               <label className="field-label">Description</label>
               <input className="field-input" value={editForm.description} onChange={(e) => setEditForm({ ...editForm, description: e.target.value })} />
             </div>
+            <div>
+              <label className="field-label">Reason for the change (optional)</label>
+              <input
+                className="field-input"
+                value={editForm.reason}
+                onChange={(e) => setEditForm({ ...editForm, reason: e.target.value })}
+                placeholder="e.g. wrong amount typed"
+              />
+            </div>
             {error && <p className="text-sm text-[var(--color-terracotta-deep)]">{error}</p>}
-            <button className="btn-primary" disabled={saving}>
-              {saving ? "Saving..." : "Save Changes"}
-            </button>
+            <div className="flex flex-wrap justify-between gap-2">
+              <button
+                type="button"
+                className="btn-danger-quiet"
+                onClick={() => {
+                  setDeleteExpense(editExpense);
+                  setEditExpense(null);
+                }}
+              >
+                Delete expense
+              </button>
+              <button className="btn-primary" disabled={saving}>
+                {saving ? "Saving..." : "Save changes"}
+              </button>
+            </div>
           </form>
         )}
       </Modal>
+
+      <ReasonModal
+        open={!!deleteExpense}
+        onClose={() => setDeleteExpense(null)}
+        title="Delete this expense?"
+        confirmLabel="Delete expense"
+        danger
+        placeholder="e.g. added twice"
+        onConfirm={async (reason) => {
+          await api.delete(`/expenses/${deleteExpense._id}`, { data: { reason } });
+          setDeleteExpense(null);
+          load();
+        }}
+      >
+        {deleteExpense && (
+          <p>
+            {deleteExpense.category}
+            {deleteExpense.subCategory ? ` / ${deleteExpense.subCategory}` : ""}, {formatMoney(deleteExpense.amount)} on{" "}
+            {formatDateTime(deleteExpense.createdAt)}.
+            {deleteExpense.relatedQuantityBori > 0 &&
+              ` The ${deleteExpense.relatedQuantityBori} × ${deleteExpense.relatedBoriSize}KG bori go back into stock.`}
+          </p>
+        )}
+      </ReasonModal>
     </div>
   );
 };

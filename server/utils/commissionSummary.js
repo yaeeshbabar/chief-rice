@@ -30,13 +30,14 @@ export const buildCommissionSummary = async () => {
         name: a.name,
         percentage: a.percentage,
         active: a.active,
+        deleted: Boolean(a.deleted),
         earned: e,
         paid: p,
         due: e - p,
       };
     })
-    // hide agents that are inactive and fully settled
-    .filter((r) => r.active || r.earned > 0 || r.paid > 0);
+    // hide agents that are inactive and fully settled; deleted ones only while something is owed
+    .filter((r) => (r.deleted ? Math.abs(r.due) >= 1 : r.active || r.earned > 0 || r.paid > 0));
 
   const totalEarned = rows.reduce((sum, r) => sum + r.earned, 0);
   const totalPaid = rows.reduce((sum, r) => sum + r.paid, 0);

@@ -4,15 +4,16 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianG
 import api from "../../api/axios.js";
 import StatCard from "../../components/StatCard.jsx";
 import Loader from "../../components/Loader.jsx";
-import { formatMoney, formatMoneyUrdu } from "../../utils/format.js";
+import KhulaContainers from "../../components/KhulaContainers.jsx";
+import { formatMoney, formatMoneyUrdu, formatGrams } from "../../utils/format.js";
 import { axisTick, compactNumber, tooltipStyle } from "../../utils/chart.js";
 
 
 const ranges = [
   { key: "daily", label: "Today" },
-  { key: "weekly", label: "This Week" },
-  { key: "monthly", label: "This Month" },
-  { key: "yearly", label: "This Year" },
+  { key: "weekly", label: "This week" },
+  { key: "monthly", label: "This month" },
+  { key: "yearly", label: "This year" },
 ];
 
 const Dashboard = () => {
@@ -54,7 +55,7 @@ const Dashboard = () => {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="font-display text-xl font-semibold text-[var(--color-coffee)]">Overview</h2>
+        <h2 className="page-title">Overview</h2>
         <div className="segmented">
           {ranges.map((r) => (
             <button
@@ -71,15 +72,15 @@ const Dashboard = () => {
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="Total Sales" value={formatMoney(summary.totalSales)} sub={`${summary.invoiceCount} invoices · ≈ ${formatMoneyUrdu(summary.totalSales)}`} accent="wheat" />
-        <StatCard label="Cash Sales" value={formatMoney(summary.cashSales)} accent="sage" />
-        <StatCard label="Credit Sales" value={formatMoney(summary.creditSales)} accent="terracotta" />
-        <StatCard label="Total Expense" value={formatMoney(summary.totalExpense)} sub={`Net cash ${formatMoney(summary.netCash)}`} accent="coffee" />
+        <StatCard label="Total sales" value={formatMoney(summary.totalSales)} sub={`${summary.invoiceCount} invoices · ≈ ${formatMoneyUrdu(summary.totalSales)}`} accent="wheat" />
+        <StatCard label="Cash sales" value={formatMoney(summary.cashSales)} accent="sage" />
+        <StatCard label="Credit sales" value={formatMoney(summary.creditSales)} accent="terracotta" />
+        <StatCard label="Expenses" value={formatMoney(summary.totalExpense)} sub={`Net cash ${formatMoney(summary.netCash)}`} accent="coffee" />
       </div>
 
       <div className="grid lg:grid-cols-3 gap-4">
         <div className="grain-card p-4 lg:col-span-2">
-          <h3 className="font-display font-semibold text-[var(--color-coffee)] mb-3">Sales Trend</h3>
+          <h3 className="section-title mb-3">Sales trend</h3>
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={trend} margin={{ top: 8, right: 8, left: -8, bottom: 0 }}>
@@ -96,7 +97,7 @@ const Dashboard = () => {
         </div>
 
         <div className="grain-card p-4">
-          <h3 className="font-display font-semibold text-[var(--color-coffee)] mb-3">Expense Breakdown</h3>
+          <h3 className="section-title mb-3">Expenses by type</h3>
           {expenseData.length === 0 ? (
             <p className="text-sm text-[var(--color-coffee-soft)] py-10 text-center">No expenses recorded yet</p>
           ) : (
@@ -118,7 +119,7 @@ const Dashboard = () => {
       <div className="grid lg:grid-cols-2 gap-4">
         <div className="grain-card p-4">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="font-display font-semibold text-[var(--color-coffee)]">Main Stock (Bori)</h3>
+            <h3 className="section-title">Bori stock</h3>
             <Link to="/admin/stock" className="text-xs font-semibold text-[var(--color-wheat-dark)]">
               Manage stock
             </Link>
@@ -150,7 +151,7 @@ const Dashboard = () => {
 
         <div className="grain-card p-4">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="font-display font-semibold text-[var(--color-coffee)]">Khata — Outstanding Credit</h3>
+            <h3 className="section-title">Khata (credit owed)</h3>
             <Link to="/admin/khata" className="text-xs font-semibold text-[var(--color-wheat-dark)]">
               View all
             </Link>
@@ -177,35 +178,20 @@ const Dashboard = () => {
       </div>
 
       <div className="grain-card p-4">
-        <h3 className="font-display font-semibold text-[var(--color-coffee)] mb-3">Active Khula Batches</h3>
-        {stockOverview?.khula?.length ? (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[500px]">
-              <thead>
-                <tr className="text-left text-[var(--color-coffee-soft)] border-b border-[var(--color-husk)]">
-                  <th className="py-2 font-medium">Rice Type</th>
-                  <th className="py-2 font-medium">Bori Opened</th>
-                  <th className="py-2 font-medium">Remaining</th>
-                  <th className="py-2 font-medium">Opened By</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[var(--color-husk)]">
-                {stockOverview.khula.map((k) => (
-                  <tr key={k._id}>
-                    <td className="py-2 font-medium">{k.riceType?.name}</td>
-                    <td className="py-2">{k.boriSize} KG</td>
-                    <td className="py-2">
-                      {(k.remainingGrams / 1000).toFixed(2)} KG / {(k.totalGrams / 1000)} KG
-                    </td>
-                    <td className="py-2">{k.openedBy?.name || "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="section-title">Khula (loose rice)</h3>
+            {stockOverview?.khulaPools?.length > 0 && (
+              <p className="text-xs text-[var(--ink-muted)]">
+                {formatGrams(stockOverview.totalKhulaGrams)} in total · about {formatMoney(stockOverview.totalKhulaValue)} at cost
+              </p>
+            )}
           </div>
-        ) : (
-          <p className="text-sm text-[var(--color-coffee-soft)] py-6 text-center">No active Khula batches right now</p>
-        )}
+          <Link to="/admin/stock" className="text-xs font-semibold text-[var(--accent-ink)]">
+            Details
+          </Link>
+        </div>
+        <KhulaContainers compact pools={stockOverview?.khulaPools || []} emptyText="No khula open right now" />
       </div>
     </div>
   );

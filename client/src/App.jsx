@@ -18,6 +18,7 @@ import AdminInvoices from "./pages/admin/Invoices.jsx";
 import AdminExpenses from "./pages/admin/Expenses.jsx";
 import AdminWapsi from "./pages/admin/Wapsi.jsx";
 import AdminSettings from "./pages/admin/Settings.jsx";
+import AsimMoney from "./pages/admin/AsimMoney.jsx";
 import InvoiceView from "./pages/InvoiceView.jsx";
 
 import SalesmanLayout from "./pages/salesman/SalesmanLayout.jsx";
@@ -61,6 +62,7 @@ function App() {
         <Route path="payments" element={<Payments role="admin" />} />
         <Route path="changes" element={<ChangesReport role="admin" />} />
         <Route path="profit" element={<ProfitReport />} />
+        <Route path="asim-money" element={<AsimMoney />} />
         <Route path="settings" element={<AdminSettings />} />
       </Route>
 

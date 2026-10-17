@@ -2,35 +2,48 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import api from "../../api/axios.js";
 import Loader from "../../components/Loader.jsx";
-import { formatMoney, formatDateTime, paymentLabel, paymentBadgeClass } from "../../utils/format.js";
+import { formatMoney, formatDate, formatDateTime, paymentLabel, paymentBadgeClass, daysAgo } from "../../utils/format.js";
 
 const Invoices = () => {
   const [sales, setSales] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filters, setFilters] = useState({ from: "", to: "", paymentType: "" });
+  // Last 30 days by default so the list stays quick as bills pile up; older bills by date or invoice number.
+  const [filters, setFilters] = useState({ from: daysAgo(29), to: "", paymentType: "" });
+  const [invoiceNo, setInvoiceNo] = useState("");
+  const [searchedNo, setSearchedNo] = useState("");
 
-  const load = () => {
+  const load = (number = "") => {
     setLoading(true);
+    setSearchedNo(number);
     const params = new URLSearchParams();
-    if (filters.from) params.set("from", filters.from);
-    if (filters.to) params.set("to", filters.to);
-    if (filters.paymentType) params.set("paymentType", filters.paymentType);
+    if (number) {
+      params.set("invoiceNumber", number);
+    } else {
+      if (filters.from) params.set("from", filters.from);
+      if (filters.to) params.set("to", filters.to);
+      if (filters.paymentType) params.set("paymentType", filters.paymentType);
+    }
     api
       .get(`/sales?${params.toString()}`)
       .then((res) => setSales(res.data))
       .finally(() => setLoading(false));
   };
 
-  useEffect(load, []);
+  useEffect(() => load(), []);
+
+  const findInvoice = (e) => {
+    e.preventDefault();
+    load(invoiceNo.trim().replace(/^#/, ""));
+  };
 
   const totalCash = sales.filter((s) => s.paymentType === "cash").reduce((sum, s) => sum + s.total, 0);
   const totalCredit = sales.filter((s) => s.paymentType === "credit").reduce((sum, s) => sum + s.total, 0);
 
   return (
     <div className="flex flex-col gap-6">
-      <h2 className="font-display text-xl font-semibold text-[var(--color-coffee)]">All Invoices</h2>
+      <h2 className="page-title">Invoices</h2>
 
-      <div className="grain-card p-4 flex flex-wrap items-end gap-3">
+      <div className="filter-bar">
         <div>
           <label className="field-label">From</label>
           <input type="date" className="field-input" value={filters.from} onChange={(e) => setFilters({ ...filters, from: e.target.value })} />
@@ -40,7 +53,7 @@ const Invoices = () => {
           <input type="date" className="field-input" value={filters.to} onChange={(e) => setFilters({ ...filters, to: e.target.value })} />
         </div>
         <div>
-          <label className="field-label">Payment Type</label>
+          <label className="field-label">Payment type</label>
           <select
             className="field-input"
             value={filters.paymentType}
@@ -51,10 +64,46 @@ const Invoices = () => {
             <option value="credit">Credit</option>
           </select>
         </div>
-        <button className="btn-primary" onClick={load}>
-          Apply Filters
+        <button className="btn-primary" onClick={() => load()}>
+          Apply
         </button>
+        <form onSubmit={findInvoice} className="flex items-end gap-2 sm:ml-auto">
+          <div>
+            <label className="field-label" htmlFor="invoice-no">
+              Find invoice #
+            </label>
+            <input
+              id="invoice-no"
+              className="field-input w-36"
+              inputMode="numeric"
+              placeholder="e.g. 105"
+              value={invoiceNo}
+              onChange={(e) => setInvoiceNo(e.target.value)}
+            />
+          </div>
+          <button className="btn-outline" disabled={!invoiceNo.trim()}>
+            Find
+          </button>
+        </form>
       </div>
+      <p className="text-xs text-[var(--ink-muted)] -mt-3">
+        {searchedNo ? (
+          <>
+            Showing invoice #{searchedNo}.{" "}
+            <button
+              className="font-medium text-[var(--accent-ink)] hover:underline"
+              onClick={() => {
+                setInvoiceNo("");
+                load();
+              }}
+            >
+              Show the list again
+            </button>
+          </>
+        ) : (
+          `Showing bills from ${filters.from ? formatDate(filters.from) : "the start"} to ${filters.to ? formatDate(filters.to) : "today"}.`
+        )}
+      </p>
 
       <div className="grid grid-cols-3 gap-4">
         <div className="grain-card p-4">
@@ -62,11 +111,11 @@ const Invoices = () => {
           <p className="font-display text-xl font-semibold">{sales.length}</p>
         </div>
         <div className="grain-card p-4">
-          <p className="text-xs text-[var(--color-coffee-soft)]">Cash Total</p>
+          <p className="text-xs text-[var(--color-coffee-soft)]">Cash total</p>
           <p className="font-display text-xl font-semibold text-[var(--color-sage-deep)]">{formatMoney(totalCash)}</p>
         </div>
         <div className="grain-card p-4">
-          <p className="text-xs text-[var(--color-coffee-soft)]">Credit Total</p>
+          <p className="text-xs text-[var(--color-coffee-soft)]">Credit total</p>
           <p className="font-display text-xl font-semibold text-[var(--color-terracotta-deep)]">{formatMoney(totalCredit)}</p>
         </div>
       </div>
@@ -83,7 +132,7 @@ const Invoices = () => {
                 <th className="py-3 px-4 font-medium">Date</th>
                 <th className="py-3 px-4 font-medium">Customer</th>
                 <th className="py-3 px-4 font-medium">Payment</th>
-                <th className="py-3 px-4 font-medium">Sold By</th>
+                <th className="py-3 px-4 font-medium">Sold by</th>
                 <th className="py-3 px-4 font-medium text-right">Total</th>
               </tr>
             </thead>

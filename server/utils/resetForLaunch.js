@@ -13,6 +13,7 @@ import KhulaBatch from "../models/KhulaBatch.js";
 import Counter from "../models/Counter.js";
 import CommissionPayout from "../models/CommissionPayout.js";
 import Stock from "../models/Stock.js";
+import ChangeLog from "../models/ChangeLog.js";
 
 // Clears the test data you entered while trying the app, so you can start real work cleanly.
 //
@@ -22,7 +23,7 @@ import Stock from "../models/Stock.js";
 // KEEPS (your setup): logins, rice types, bank accounts, commission salesmen & their %,
 //                     salary names, rent types.
 // CLEARS: every bill, customer/khata, payment, expense, return, cash handover, commission
-//         payout, khula batch and stock movement. Stock quantities AND purchase prices go back to 0
+//         payout, khula batch, stock movement and change record. Stock quantities AND purchase prices go back to 0
 //         (so you re-enter real stock). Invoice numbers and daily bill numbers start again from 1.
 //
 // Add --full to also wipe the settings above and drop the entire database (then run `npm run seed`).
@@ -45,6 +46,7 @@ const run = async () => {
     "Commission payouts": await CommissionPayout.countDocuments(),
     "Khula batches": await KhulaBatch.countDocuments(),
     "Stock movements": await StockTransaction.countDocuments(),
+    "Change records": await ChangeLog.countDocuments(),
   };
 
   console.log(`\nDatabase: ${db}`);
@@ -72,6 +74,7 @@ const run = async () => {
       CommissionPayout.deleteMany({}),
       KhulaBatch.deleteMany({}),
       StockTransaction.deleteMany({}),
+      ChangeLog.deleteMany({}),
       Counter.deleteMany({}),
     ]);
     await Stock.updateMany({}, { $set: { quantity: 0, lastPricePerBori: 0 } });

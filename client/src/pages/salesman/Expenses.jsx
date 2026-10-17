@@ -39,7 +39,7 @@ const Expenses = () => {
   const [success, setSuccess] = useState("");
   const [saving, setSaving] = useState(false);
   const [editExpense, setEditExpense] = useState(null);
-  const [editForm, setEditForm] = useState({ category: "", subCategory: "", amount: "", description: "" });
+  const [editForm, setEditForm] = useState({ category: "", subCategory: "", amount: "", description: "", reason: "" });
   const [editError, setEditError] = useState("");
   const [editSaving, setEditSaving] = useState(false);
 
@@ -83,7 +83,7 @@ const Expenses = () => {
       return;
     }
     if (subCategory === "Rice Bags" && (!riceBagsRiceType || !riceBagsQty)) {
-      setError("Select rice type and quantity for Rice Bags - this also removes it from main stock");
+      setError("Pick the rice type and number of bags");
       return;
     }
     setSaving(true);
@@ -111,7 +111,7 @@ const Expenses = () => {
 
   const openEditExpense = (exp) => {
     setEditError("");
-    setEditForm({ category: exp.category, subCategory: exp.subCategory || "", amount: exp.amount, description: exp.description || "" });
+    setEditForm({ category: exp.category, subCategory: exp.subCategory || "", amount: exp.amount, description: exp.description || "", reason: "" });
     setEditExpense(exp);
   };
 
@@ -132,9 +132,9 @@ const Expenses = () => {
 
   return (
     <div className="grid lg:grid-cols-3 gap-6">
-      <h2 className="lg:col-span-3 font-display text-xl font-semibold text-[var(--ink)]">Extra expense</h2>
+      <h2 className="lg:col-span-3 page-title">Expenses</h2>
       <div className="grain-card p-4 flex flex-col gap-3 h-fit">
-        <h3 className="font-display font-semibold text-[var(--color-coffee)]">Add Expense</h3>
+        <h3 className="section-title">Add expense</h3>
         <form onSubmit={handleSubmit} className="flex flex-col gap-3">
           <div>
             <label className="field-label">Khata</label>
@@ -157,7 +157,7 @@ const Expenses = () => {
           )}
           {category === "Dukan Kharch Khata" && subCategory === "Rent" && (
             <div>
-              <label className="field-label">Which Rent</label>
+              <label className="field-label">Which rent</label>
               <select className="field-input" value={rentType} onChange={(e) => setRentType(e.target.value)}>
                 <option value="">Select</option>
                 {rentTypes.map((r) => (
@@ -182,7 +182,7 @@ const Expenses = () => {
                 This also removes the bori from main stock, same as a sale would.
               </p>
               <div>
-                <label className="field-label">Rice Type</label>
+                <label className="field-label">Rice type</label>
                 <select className="field-input" value={riceBagsRiceType} onChange={(e) => setRiceBagsRiceType(e.target.value)}>
                   <option value="">Select</option>
                   {riceTypes.map((rt) => (
@@ -193,7 +193,7 @@ const Expenses = () => {
                 </select>
               </div>
               <div>
-                <label className="field-label">Bori Size</label>
+                <label className="field-label">Bori size</label>
                 <div className="flex gap-2">
                   {[25, 50].map((sz) => (
                     <button
@@ -217,7 +217,7 @@ const Expenses = () => {
           )}
           {category === "Salary" && (
             <div>
-              <label className="field-label">Salesman Name</label>
+              <label className="field-label">Salesman name</label>
               <select className="field-input" value={subCategory} onChange={(e) => setSubCategory(e.target.value)}>
                 {salaryPeople.length ? (
                   salaryPeople.map((p) => <option key={p._id}>{p.name}</option>)
@@ -241,7 +241,7 @@ const Expenses = () => {
           {error && <p className="text-sm text-[var(--color-terracotta-deep)]">{error}</p>}
           {success && <p className="text-sm text-[var(--color-sage-deep)]">{success}</p>}
           <button className="btn-primary" disabled={saving}>
-            {saving ? "Saving..." : "Add Expense"}
+            {saving ? "Saving..." : "Add expense"}
           </button>
         </form>
       </div>
@@ -277,9 +277,15 @@ const Expenses = () => {
                   </td>
                   <td className="py-2.5 px-4 text-right font-semibold">{formatMoney(e.amount)}</td>
                   <td className="py-2.5 px-4 text-right">
-                    <button className="text-xs font-semibold text-[var(--color-wheat-dark)]" onClick={() => openEditExpense(e)}>
-                      Edit
-                    </button>
+                    {e.relatedSale ? (
+                      <span className="text-xs text-[var(--ink-faint)]" title="Change it by editing the bill">
+                        From a bill
+                      </span>
+                    ) : (
+                      <button className="text-xs font-semibold text-[var(--color-wheat-dark)]" onClick={() => openEditExpense(e)}>
+                        Edit
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -295,11 +301,11 @@ const Expenses = () => {
         )}
       </div>
 
-      <div className="lg:col-span-3">
+      <div className="lg:col-span-3 min-w-0">
         <CommissionPanel />
       </div>
 
-      <Modal open={!!editExpense} onClose={() => setEditExpense(null)} title="Edit Expense">
+      <Modal open={!!editExpense} onClose={() => setEditExpense(null)} title="Edit expense">
         {editExpense && (
           <form onSubmit={submitEditExpense} className="flex flex-col gap-3">
             <div>
@@ -311,7 +317,7 @@ const Expenses = () => {
               </select>
             </div>
             <div>
-              <label className="field-label">Detail / Sub-category</label>
+              <label className="field-label">Detail</label>
               <input className="field-input" value={editForm.subCategory} onChange={(ev) => setEditForm({ ...editForm, subCategory: ev.target.value })} />
             </div>
             <div>
@@ -329,15 +335,23 @@ const Expenses = () => {
               <label className="field-label">Note</label>
               <input className="field-input" value={editForm.description} onChange={(ev) => setEditForm({ ...editForm, description: ev.target.value })} />
             </div>
+            <div>
+              <label className="field-label">Reason for the change (optional)</label>
+              <input
+                className="field-input"
+                value={editForm.reason}
+                onChange={(ev) => setEditForm({ ...editForm, reason: ev.target.value })}
+                placeholder="e.g. wrong amount typed"
+              />
+            </div>
             {editForm.subCategory === "Rice Bags" && (
               <p className="text-xs text-[var(--color-coffee-soft)] bg-[var(--surface-soft-brand)] rounded-lg p-2">
-                To change the rice type/bori size/quantity for a Rice Bags expense, delete this one and add a fresh
-                entry - that keeps the stock adjustment accurate.
+                To change rice type, size or bags, ask Asim to delete it, then add it again.
               </p>
             )}
             {editError && <p className="text-sm text-[var(--color-terracotta-deep)]">{editError}</p>}
             <button className="btn-primary" disabled={editSaving}>
-              {editSaving ? "Saving..." : "Save Changes"}
+              {editSaving ? "Saving..." : "Save changes"}
             </button>
           </form>
         )}

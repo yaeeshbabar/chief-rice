@@ -119,19 +119,19 @@ const CustomerPicker = ({ addingNew, onModeChange, selectedId, onSelect, newCust
         <div className="flex flex-col gap-2">
           <input
             className="field-input"
-            placeholder="Customer Name *"
+            placeholder="Customer name *"
             value={newCustomer.name}
             onChange={(e) => onNewCustomerChange({ ...newCustomer, name: e.target.value })}
           />
           <input
             className="field-input"
-            placeholder="Shop Name (optional)"
+            placeholder="Shop name (optional)"
             value={newCustomer.shopName}
             onChange={(e) => onNewCustomerChange({ ...newCustomer, shopName: e.target.value })}
           />
           <input
             className="field-input"
-            placeholder="Phone Number"
+            placeholder="Phone number"
             value={newCustomer.phone}
             onChange={(e) => onNewCustomerChange({ ...newCustomer, phone: e.target.value })}
           />

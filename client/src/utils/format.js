@@ -12,6 +12,17 @@ export const formatGrams = (grams) => {
   return `${trimmed} KG`;
 };
 
+// YYYY-MM-DD for a date input, in the device's own time. daysAgo(29) = start of a 30-day window.
+export const inputDate = (d = new Date()) => {
+  const x = new Date(d);
+  return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`;
+};
+export const daysAgo = (days) => {
+  const d = new Date();
+  d.setDate(d.getDate() - days);
+  return inputDate(d);
+};
+
 export const formatDate = (d) =>
   new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
 
@@ -25,6 +36,20 @@ export const formatDateTime = (d) =>
   });
 
 export const gramsPresets = [100, 200, 250, 500, 750, 1000, 2000, 5000];
+
+// Shortfall amounts: grams when small ("300 g"), KG from 1 KG up ("1.25 KG").
+export const formatShort = (grams) => {
+  const g = Math.abs(Number(grams || 0));
+  return g < 1000 ? `${Math.round(g)} g` : formatGrams(g);
+};
+
+// Where a lot of khula (loose rice) came from: an opened bori, loose rice added by admin,
+// or rice a customer returned.
+export const khulaSourceLabel = (batch) => {
+  if (batch?.source === "LOOSE") return "Loose rice";
+  if (batch?.source === "RETURN") return "Returned";
+  return batch?.boriSize ? `${batch.boriSize} KG bori` : "Bori";
+};
 
 // Pakistani/Urdu-style short numbering: Hazar (thousand), Lakh (100,000), Crore (10,000,000)
 export const formatMoneyUrdu = (value) => {

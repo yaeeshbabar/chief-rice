@@ -10,6 +10,11 @@ const wapsiSchema = new mongoose.Schema(
     quantityGrams: { type: Number },
     quantityBori: { type: Number },
     cashReturned: { type: Number, default: 0 },
+    // Khula returns go back into that type's khula as their own lot.
+    khulaBatch: { type: mongoose.Schema.Types.ObjectId, ref: "KhulaBatch" },
+    // When the return reduced a customer's khata instead of (or as well as) cash, how much.
+    customer: { type: mongoose.Schema.Types.ObjectId, ref: "Customer" },
+    balanceAdjustment: { type: Number, default: 0 },
     reason: { type: String, default: "" },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
   },

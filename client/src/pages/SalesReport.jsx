@@ -50,9 +50,9 @@ const SalesReport = ({ role }) => {
 
   return (
     <div className="flex flex-col gap-6">
-      <h2 className="font-display text-xl font-semibold text-[var(--color-coffee)]">Sales Report</h2>
+      <h2 className="page-title">Sales report</h2>
 
-      <div className="grain-card p-4 flex flex-wrap items-end gap-3">
+      <div className="filter-bar">
         <div className="segmented">
           {quickRanges.map((r) => (
             <button
@@ -112,14 +112,14 @@ const SalesReport = ({ role }) => {
       ) : (
         <>
           <div className="grid grid-cols-3 gap-4">
-            <button onClick={() => setPaymentType("")} className="text-left">
-              <StatCard label={`All Bills ${paymentType === "" ? "· selected" : ""}`} value={formatMoney(data.totals.combinedTotal)} sub={`${data.totals.combinedCount} bills`} accent="wheat" />
+            <button onClick={() => setPaymentType("")} aria-pressed={paymentType === ""} className={`stat-pick ${paymentType === "" ? "is-on" : ""}`}>
+              <StatCard label="All bills" value={formatMoney(data.totals.combinedTotal)} sub={`${data.totals.combinedCount} bills`} accent="wheat" />
             </button>
-            <button onClick={() => setPaymentType("cash")} className="text-left">
-              <StatCard label={`Cash ${paymentType === "cash" ? "· selected" : ""}`} value={formatMoney(data.totals.cashTotal)} sub={`${data.totals.cashCount} bills`} accent="sage" />
+            <button onClick={() => setPaymentType("cash")} aria-pressed={paymentType === "cash"} className={`stat-pick ${paymentType === "cash" ? "is-on" : ""}`}>
+              <StatCard label="Cash" value={formatMoney(data.totals.cashTotal)} sub={`${data.totals.cashCount} bills`} accent="sage" />
             </button>
-            <button onClick={() => setPaymentType("credit")} className="text-left">
-              <StatCard label={`Credit ${paymentType === "credit" ? "· selected" : ""}`} value={formatMoney(data.totals.creditTotal)} sub={`${data.totals.creditCount} bills`} accent="terracotta" />
+            <button onClick={() => setPaymentType("credit")} aria-pressed={paymentType === "credit"} className={`stat-pick ${paymentType === "credit" ? "is-on" : ""}`}>
+              <StatCard label="Credit" value={formatMoney(data.totals.creditTotal)} sub={`${data.totals.creditCount} bills`} accent="terracotta" />
             </button>
           </div>
 
@@ -132,7 +132,7 @@ const SalesReport = ({ role }) => {
                   <th className="py-3 px-4 font-medium">Date</th>
                   <th className="py-3 px-4 font-medium">Customer</th>
                   <th className="py-3 px-4 font-medium">Payment</th>
-                  <th className="py-3 px-4 font-medium">Sold By</th>
+                  <th className="py-3 px-4 font-medium">Sold by</th>
                   <th className="py-3 px-4 font-medium text-right">Total</th>
                 </tr>
               </thead>

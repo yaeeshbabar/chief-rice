@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { Pencil, Trash2 } from "lucide-react";
 import api from "../api/axios.js";
 import Loader from "../components/Loader.jsx";
 import StatCard from "../components/StatCard.jsx";
+import { EditPaymentModal, DeletePaymentModal } from "../components/PaymentFixModals.jsx";
 import { formatMoney, formatDateTime, monthBounds, accountLabel } from "../utils/format.js";
 
 const quickRanges = [
@@ -19,6 +21,8 @@ const Payments = ({ role }) => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [editTarget, setEditTarget] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
 
   const load = () => {
     setLoading(true);
@@ -48,9 +52,9 @@ const Payments = ({ role }) => {
 
   return (
     <div className="flex flex-col gap-6">
-      <h2 className="font-display text-xl font-semibold text-[var(--color-coffee)]">Credit Collections (Payments)</h2>
+      <h2 className="page-title">Collections</h2>
 
-      <div className="grain-card p-4 flex flex-wrap items-end gap-3">
+      <div className="filter-bar">
         <div className="segmented">
           {quickRanges.map((r) => (
             <button
@@ -92,19 +96,22 @@ const Payments = ({ role }) => {
       ) : (
         <>
           <div className="grid grid-cols-2 gap-4">
-            <StatCard label="Total Collected" value={formatMoney(data.total)} sub={`${data.count} payment(s)`} accent="sage" />
-            <StatCard label="Unique Creditors Who Paid" value={new Set(data.payments.map((p) => p.customer?._id)).size} accent="wheat" />
+            <StatCard label="Total collected" value={formatMoney(data.total)} sub={`${data.count} payment(s)`} accent="sage" />
+            <StatCard label="Creditors who paid" value={new Set(data.payments.map((p) => p.customer?._id)).size} accent="wheat" />
           </div>
 
           <div className="grain-card overflow-x-auto">
-            <table className="w-full text-sm min-w-[600px]">
+            <table className="w-full text-sm min-w-[680px]">
               <thead>
                 <tr className="text-left text-[var(--color-coffee-soft)] border-b border-[var(--color-husk)]">
                   <th className="py-3 px-4 font-medium">Date</th>
                   <th className="py-3 px-4 font-medium">Creditor</th>
                   <th className="py-3 px-4 font-medium">Method</th>
-                  <th className="py-3 px-4 font-medium">Collected By</th>
+                  <th className="py-3 px-4 font-medium">Collected by</th>
                   <th className="py-3 px-4 font-medium text-right">Amount</th>
+                  <th className="relative py-3 px-2 w-[76px]">
+                    <span className="sr-only">Fix</span>
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--color-husk)]">
@@ -123,14 +130,30 @@ const Payments = ({ role }) => {
                     <td className="py-2.5 px-4">
                       {p.paymentMethod === "online" ? accountLabel(p.account) : "Cash"}
                       {p.directToAsim && <span className="badge badge-over ml-1">Direct to Asim</span>}
+                      {p.edited && <span className="badge badge-account ml-1">Edited</span>}
                     </td>
                     <td className="py-2.5 px-4">{p.createdBy?.name}</td>
                     <td className="py-2.5 px-4 text-right font-semibold">{formatMoney(p.amount)}</td>
+                    <td className="py-1 px-2">
+                      <div className="flex justify-end">
+                        <button className="icon-btn h-8 w-8" onClick={() => setEditTarget(p)} title="Correct this payment" aria-label="Correct this payment">
+                          <Pencil size={15} />
+                        </button>
+                        <button
+                          className="icon-btn h-8 w-8 hover:text-[var(--neg-ink)]"
+                          onClick={() => setDeleteTarget(p)}
+                          title="Delete this payment"
+                          aria-label="Delete this payment"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
+                    </td>
                   </tr>
                 ))}
                 {!data.payments.length && (
                   <tr>
-                    <td colSpan={5} className="py-8 text-center text-[var(--color-coffee-soft)]">
+                    <td colSpan={6} className="py-8 text-center text-[var(--color-coffee-soft)]">
                       No payments in this range
                     </td>
                   </tr>
@@ -140,6 +163,9 @@ const Payments = ({ role }) => {
           </div>
         </>
       )}
+
+      <EditPaymentModal payment={editTarget} onClose={() => setEditTarget(null)} onDone={load} />
+      <DeletePaymentModal payment={deleteTarget} onClose={() => setDeleteTarget(null)} onDone={load} />
     </div>
   );
 };

@@ -10,6 +10,9 @@ const bankAccountSchema = new mongoose.Schema(
     iban: { type: String, default: "" },
     branchCode: { type: String, default: "" },
     active: { type: Boolean, default: true },
+    // Deleted accounts that old bills/payments still point to are hidden, not erased.
+    deleted: { type: Boolean, default: false },
+    deletedAt: { type: Date },
   },
   { timestamps: true }
 );

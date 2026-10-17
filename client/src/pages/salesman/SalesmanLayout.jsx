@@ -42,7 +42,7 @@ const navGroups = [
     items: [
       { to: "/salesman/expenses", label: "Extra expense", icon: Wallet },
       { to: "/salesman/cash", label: "Cash handling", icon: Banknote },
-      { to: "/salesman/profit", label: "Profit & commission", icon: TrendingUp },
+      { to: "/salesman/profit", label: "Profit", icon: TrendingUp },
     ],
   },
   {

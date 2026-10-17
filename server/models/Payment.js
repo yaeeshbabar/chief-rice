@@ -12,6 +12,7 @@ const paymentSchema = new mongoose.Schema(
     // the customer's balance, payment history, and profit reporting.
     directToAsim: { type: Boolean, default: false },
     note: { type: String, default: "" },
+    edited: { type: Boolean, default: false }, // corrected after it was saved (see Changes report)
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
   },
   { timestamps: true }

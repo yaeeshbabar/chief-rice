@@ -6,6 +6,7 @@ import {
   ClipboardList,
   HandCoins,
   History,
+  Landmark,
   LayoutDashboard,
   Package,
   Receipt,
@@ -42,7 +43,8 @@ const navGroups = [
     items: [
       { to: "/admin/expenses", label: "Expenses", icon: Wallet },
       { to: "/admin/cash", label: "Cash handling", icon: Banknote },
-      { to: "/admin/profit", label: "Profit & commission", icon: TrendingUp },
+      { to: "/admin/asim-money", label: "Paid to Asim", icon: Landmark },
+      { to: "/admin/profit", label: "Profit", icon: TrendingUp },
     ],
   },
   {

@@ -7,13 +7,14 @@ import CustomerPicker from "../../components/CustomerPicker.jsx";
 import AccountSelect from "../../components/AccountSelect.jsx";
 import { formatMoney, formatGrams, gramsPresets } from "../../utils/format.js";
 import { useBilling } from "../../context/BillingContext.jsx";
+import { RiceBin } from "../../components/KhulaContainers.jsx";
 
 const NewSale = () => {
   const navigate = useNavigate();
   const { bills, activeBill, updateActiveBill, addBill, switchBill, closeBill, resetActiveBill } = useBilling();
   const [loading, setLoading] = useState(true);
   const [riceTypes, setRiceTypes] = useState([]);
-  const [khulaBatches, setKhulaBatches] = useState([]);
+  const [khulaPools, setKhulaPools] = useState([]);
   const [stock, setStock] = useState([]);
   const [agents, setAgents] = useState([]);
   const [tab, setTab] = useState("khula");
@@ -24,7 +25,6 @@ const NewSale = () => {
 
   // khula form
   const [khulaRiceType, setKhulaRiceType] = useState("");
-  const [khulaBatchId, setKhulaBatchId] = useState("");
   const [khulaGrams, setKhulaGrams] = useState("");
   const [khulaPrice, setKhulaPrice] = useState("");
 
@@ -38,13 +38,13 @@ const NewSale = () => {
     setLoading(true);
     Promise.all([
       api.get("/rice-types"),
-      api.get("/khula?status=ACTIVE"),
+      api.get("/khula/summary"),
       api.get("/stock"),
       api.get("/commission-agents"),
     ])
       .then(([rt, kb, st, ca]) => {
         setRiceTypes(rt.data);
-        setKhulaBatches(kb.data);
+        setKhulaPools(kb.data);
         setStock(st.data);
         setAgents(ca.data);
       })
@@ -53,11 +53,9 @@ const NewSale = () => {
 
   useEffect(load, []);
 
-  const batchesForType = useMemo(
-    () => khulaBatches.filter((b) => b.riceType?._id === khulaRiceType),
-    [khulaBatches, khulaRiceType]
-  );
-  const selectedBatch = batchesForType.find((b) => b._id === khulaBatchId);
+  // Khula is sold by rice type: all open bori, loose rice and returns of a type count together.
+  const poolFor = (riceTypeId) => khulaPools.find((p) => p.riceType?._id === riceTypeId);
+  const selectedPool = poolFor(khulaRiceType);
 
   const stockForBoriType = useMemo(() => stock.filter((s) => s.riceType?._id === boriRiceType), [stock, boriRiceType]);
   const selectedStock = stockForBoriType.find((s) => s.boriSize === Number(boriSize));
@@ -66,12 +64,16 @@ const NewSale = () => {
   // submitted to the server yet, so the server's remainingGrams/quantity numbers don't
   // reflect them. Subtract those out here so the on-screen "remaining" always matches
   // what's actually still free to add, not what the last server fetch said.
-  const reservedGramsForBatch = (batchId) =>
+  const reservedGramsForType = (riceTypeId) =>
     bills.reduce(
       (sum, bill) =>
-        sum + bill.cart.filter((i) => i.khulaBatchId === batchId).reduce((s, i) => s + i.quantityGrams, 0),
+        sum +
+        bill.cart
+          .filter((i) => i.itemType === "khula" && i.riceTypeId === riceTypeId)
+          .reduce((s, i) => s + i.quantityGrams, 0),
       0
     );
+  const khulaLeftFor = (riceTypeId) => (poolFor(riceTypeId)?.remainingGrams || 0) - reservedGramsForType(riceTypeId);
   const reservedBoriFor = (riceTypeId, size) =>
     bills.reduce(
       (sum, bill) =>
@@ -82,14 +84,9 @@ const NewSale = () => {
       0
     );
 
-  const effectiveRemainingGrams = selectedBatch ? selectedBatch.remainingGrams - reservedGramsForBatch(selectedBatch._id) : 0;
+  const effectiveRemainingGrams = khulaRiceType ? khulaLeftFor(khulaRiceType) : 0;
   const effectiveAvailableBori = selectedStock ? selectedStock.quantity - reservedBoriFor(boriRiceType, boriSize) : 0;
 
-  const costForKhulaBatch = (batch) => {
-    if (!batch) return 0;
-    const stockRow = stock.find((s) => s.riceType?._id === batch.riceType?._id && s.boriSize === batch.boriSize);
-    return stockRow ? (stockRow.lastPricePerBori || 0) / batch.boriSize : 0; // per KG
-  };
 
   if (!activeBill) return <Loader />;
   const cart = activeBill.cart;
@@ -97,12 +94,16 @@ const NewSale = () => {
 
   const addKhulaToCart = () => {
     setError("");
-    if (!khulaRiceType || !khulaBatchId || !khulaGrams || !khulaPrice) {
-      setError("Fill rice type, khula batch, quantity and price");
+    if (!khulaRiceType || !khulaGrams || !khulaPrice) {
+      setError("Fill rice type, quantity and price");
+      return;
+    }
+    if (Number(khulaGrams) <= 0) {
+      setError("Enter how many grams");
       return;
     }
     if (Number(khulaGrams) > effectiveRemainingGrams) {
-      setError(`Only ${formatGrams(effectiveRemainingGrams)} left in this Khula batch`);
+      setError(`Only ${formatGrams(Math.max(0, effectiveRemainingGrams))} of this rice is left in khula`);
       return;
     }
     const riceType = riceTypes.find((r) => r._id === khulaRiceType);
@@ -114,8 +115,6 @@ const NewSale = () => {
           itemType: "khula",
           riceTypeId: khulaRiceType,
           riceTypeName: riceType.name,
-          boriSize: selectedBatch.boriSize,
-          khulaBatchId,
           quantityGrams: Number(khulaGrams),
           pricePerUnit: Number(khulaPrice),
           total,
@@ -181,8 +180,7 @@ const NewSale = () => {
         items: cart.map((i) => ({
           itemType: i.itemType,
           riceTypeId: i.riceTypeId,
-          boriSize: i.boriSize,
-          khulaBatchId: i.khulaBatchId,
+          boriSize: i.itemType === "bori" ? i.boriSize : undefined,
           quantityGrams: i.quantityGrams,
           quantityBori: i.quantityBori,
           pricePerUnit: i.pricePerUnit,
@@ -211,7 +209,7 @@ const NewSale = () => {
 
   return (
     <div className="flex flex-col gap-5">
-      <h2 className="font-display text-xl font-semibold text-[var(--ink)]">New sale</h2>
+      <h2 className="page-title">New sale</h2>
 
       {/* Multi-bill tab bar */}
       <div className="flex items-center gap-2 overflow-x-auto pb-1">
@@ -296,67 +294,55 @@ const NewSale = () => {
 
             {tab === "khula" ? (
               <div className="grain-card p-4 flex flex-col gap-3">
-                <h3 className="font-display font-semibold text-[var(--color-coffee)]">Sell Khula (Loose Rice)</h3>
+                <h3 className="section-title">Sell khula (loose rice)</h3>
                 <div>
-                  <label className="field-label">Rice Type</label>
-                  <select
-                    className="field-input"
-                    value={khulaRiceType}
-                    onChange={(e) => {
-                      setKhulaRiceType(e.target.value);
-                      setKhulaBatchId("");
-                    }}
-                  >
+                  <label className="field-label">Rice type</label>
+                  <select className="field-input" value={khulaRiceType} onChange={(e) => setKhulaRiceType(e.target.value)}>
                     <option value="">Select rice type</option>
-                    {riceTypes.map((rt) => (
-                      <option key={rt._id} value={rt._id}>
-                        {rt.name}
-                      </option>
-                    ))}
+                    {riceTypes.map((rt) => {
+                      const left = khulaLeftFor(rt._id);
+                      return (
+                        <option key={rt._id} value={rt._id}>
+                          {rt.name} {poolFor(rt._id) ? `· ${formatGrams(Math.max(0, left))} in khula` : "· no khula"}
+                        </option>
+                      );
+                    })}
                   </select>
                 </div>
-                {khulaRiceType && (
-                  <div>
-                    <label className="field-label">Active Khula Batch</label>
-                    {batchesForType.length ? (
-                      <select className="field-input" value={khulaBatchId} onChange={(e) => setKhulaBatchId(e.target.value)}>
-                        <option value="">Select batch</option>
-                        {batchesForType.map((b) => {
-                          const effective = b.remainingGrams - reservedGramsForBatch(b._id);
-                          return (
-                            <option key={b._id} value={b._id}>
-                              {b.boriSize}KG bori — {formatGrams(effective)} remaining
-                            </option>
-                          );
-                        })}
-                      </select>
-                    ) : (
-                      <p className="text-sm text-[var(--color-terracotta-deep)] bg-[var(--surface-soft-danger)] rounded-lg px-3 py-2">
-                        No active Khula batch for this rice type. Opening a new bori to Khula won't affect this bill —
-                        switch back here anytime to keep billing.
-                      </p>
-                    )}
-                    {selectedBatch && (
-                      <p className="text-sm font-medium mt-2">
-                        Remaining right now:{" "}
-                        <span
-                          className={`px-2 py-0.5 rounded-md ${
-                            effectiveRemainingGrams > 0
-                              ? "bg-[var(--surface-soft)] text-[var(--color-sage-deep)]"
-                              : "bg-[var(--surface-soft-danger)] text-[var(--color-terracotta-deep)]"
-                          }`}
-                        >
-                          {formatGrams(effectiveRemainingGrams)}
-                        </span>
-                      </p>
-                    )}
-                    {showCost && selectedBatch && (
-                      <p className="text-xs font-bold text-[var(--color-wheat-dark)] mt-1">
-                        Purchase cost: {formatMoney(costForKhulaBatch(selectedBatch))} / KG
-                      </p>
-                    )}
-                  </div>
-                )}
+                {khulaRiceType &&
+                  (selectedPool ? (
+                    <div className="flex items-center gap-3 rounded-lg bg-[var(--bg-subtle)] px-3 py-2.5">
+                      <div className="w-8 shrink-0">
+                        <RiceBin
+                          small
+                          percent={selectedPool.capacityGrams > 0 ? (Math.max(0, effectiveRemainingGrams) / selectedPool.capacityGrams) * 100 : 0}
+                        />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium">
+                          In khula right now:{" "}
+                          <span className={effectiveRemainingGrams > 0 ? "text-[var(--pos-ink)]" : "text-[var(--neg-ink)]"}>
+                            {formatGrams(Math.max(0, effectiveRemainingGrams))}
+                          </span>
+                        </p>
+                        <p className="text-xs text-[var(--ink-muted)]">
+                          {selectedPool.batches.length > 1
+                            ? `${selectedPool.batches.length} lots added together, oldest is sold first`
+                            : "1 lot"}
+                          {reservedGramsForType(khulaRiceType) > 0 && ` · ${formatGrams(reservedGramsForType(khulaRiceType))} already on open bills`}
+                        </p>
+                        {showCost && (
+                          <p className="text-xs font-semibold text-[var(--accent-ink)] mt-0.5">
+                            Purchase cost: about {formatMoney(selectedPool.avgCostPerKg)} / KG
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-[var(--neg-ink)] bg-[var(--neg-tint)] rounded-lg px-3 py-2">
+                      No khula of this rice type. Open a bori to khula from the Khula page; this bill stays open.
+                    </p>
+                  ))}
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="field-label">Quantity (grams)</label>
@@ -386,9 +372,9 @@ const NewSale = () => {
               </div>
             ) : (
               <div className="grain-card p-4 flex flex-col gap-3">
-                <h3 className="font-display font-semibold text-[var(--color-coffee)]">Sell Bori (Full Bags)</h3>
+                <h3 className="section-title">Sell bori (full bags)</h3>
                 <div>
-                  <label className="field-label">Rice Type</label>
+                  <label className="field-label">Rice type</label>
                   <select className="field-input" value={boriRiceType} onChange={(e) => setBoriRiceType(e.target.value)}>
                     <option value="">Select rice type</option>
                     {riceTypes.map((rt) => (
@@ -399,7 +385,7 @@ const NewSale = () => {
                   </select>
                 </div>
                 <div>
-                  <label className="field-label">Bori Size</label>
+                  <label className="field-label">Bori size</label>
                   <div className="flex gap-2">
                     {[25, 50].map((sz) => (
                       <button
@@ -436,11 +422,11 @@ const NewSale = () => {
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="field-label">Number of Bori</label>
+                    <label className="field-label">Number of bori</label>
                     <input type="number" min="1" className="field-input" value={boriQty} onChange={(e) => setBoriQty(e.target.value)} placeholder="e.g. 1, 3, 10" />
                   </div>
                   <div>
-                    <label className="field-label">Price per Bori (Rs)</label>
+                    <label className="field-label">Price per bori (Rs)</label>
                     <input type="number" min="0" className="field-input" value={boriPrice} onChange={(e) => setBoriPrice(e.target.value)} />
                   </div>
                 </div>
@@ -452,10 +438,10 @@ const NewSale = () => {
             )}
 
             <div className="grain-card p-4 flex flex-col gap-3">
-              <h3 className="font-display font-semibold text-[var(--color-coffee)]">Delivery &amp; Commission (optional)</h3>
+              <h3 className="section-title">Delivery &amp; commission (optional)</h3>
               <div className="grid sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="field-label">Ride / delivery cost (Rs) — store expense, not billed to customer</label>
+                  <label className="field-label">Delivery cost (Rs), not on the bill</label>
                   <input
                     type="number"
                     min="0"
@@ -466,7 +452,7 @@ const NewSale = () => {
                   />
                 </div>
                 <div>
-                  <label className="field-label">Commission agent (if this sale is theirs)</label>
+                  <label className="field-label">Commission salesman (if it is their sale)</label>
                   <select
                     className="field-input"
                     value={activeBill.commissionAgentId || ""}
@@ -486,7 +472,7 @@ const NewSale = () => {
 
           <div className="flex flex-col gap-4">
             <div className="grain-card p-4 flex flex-col gap-3">
-              <h3 className="font-display font-semibold text-[var(--ink)]">Bill {activeBillNumber}</h3>
+              <h3 className="section-title">Bill {activeBillNumber}</h3>
               {cart.length ? (
                 <div className="flex flex-col gap-2">
                   {cart.map((item, idx) => (
@@ -515,7 +501,7 @@ const NewSale = () => {
               )}
 
               <div>
-                <label className="field-label">Payment Type</label>
+                <label className="field-label">Payment type</label>
                 <div className="flex gap-2">
                   <button
                     onClick={() => updateActiveBill({ paymentType: "cash" })}
@@ -534,19 +520,19 @@ const NewSale = () => {
 
               {activeBill.paymentType === "cash" && (
                 <div className="flex flex-col gap-2">
-                  <label className="field-label">Received As</label>
+                  <label className="field-label">Received as</label>
                   <div className="flex gap-2">
                     <button
                       onClick={() => updateActiveBill({ paymentMethod: "cash" })}
                       className={`flex-1 rounded-lg border py-2 text-sm font-semibold ${(activeBill.paymentMethod || "cash") === "cash" ? "border-[var(--color-wheat)] bg-[var(--color-cream-deep)]" : "border-[var(--color-husk)]"}`}
                     >
-                      Physical Cash
+                      Cash
                     </button>
                     <button
                       onClick={() => updateActiveBill({ paymentMethod: "online" })}
                       className={`flex-1 rounded-lg border py-2 text-sm font-semibold ${activeBill.paymentMethod === "online" ? "border-[var(--color-wheat)] bg-[var(--color-cream-deep)]" : "border-[var(--color-husk)]"}`}
                     >
-                      Online Transfer
+                      Online transfer
                     </button>
                   </div>
                   {activeBill.paymentMethod === "online" && (
@@ -580,7 +566,7 @@ const NewSale = () => {
               {error && <p className="text-sm text-[var(--color-terracotta-deep)] bg-[var(--surface-soft-danger)] rounded-lg px-3 py-2">{error}</p>}
 
               <button className="btn-primary" disabled={submitting} onClick={submitSale}>
-                {submitting ? "Saving..." : "Complete Sale"}
+                {submitting ? "Saving..." : "Complete sale"}
               </button>
             </div>
 

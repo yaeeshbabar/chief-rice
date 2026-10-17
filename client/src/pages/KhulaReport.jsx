@@ -2,14 +2,26 @@ import { useEffect, useState } from "react";
 import api from "../api/axios.js";
 import Loader from "../components/Loader.jsx";
 import StatCard from "../components/StatCard.jsx";
-import { formatGrams, formatDateTime, monthBounds } from "../utils/format.js";
+import { formatGrams, formatDateTime, formatShort, monthBounds, khulaSourceLabel } from "../utils/format.js";
+
+const statusBadge = (b) => {
+  if (b.status === "OVER") return <span className="badge badge-over">Ended early</span>;
+  if (b.status === "FINISHED") return <span className="badge badge-finished">Finished</span>;
+  return <span className="badge badge-active">Open</span>;
+};
+
+const shortCell = (grams, extraWord = "extra") => {
+  if (grams > 0) return <span className="font-semibold text-[var(--warn-ink)]">{formatShort(grams)}</span>;
+  if (grams < 0) return <span className="text-[var(--ink-muted)]">{`${formatShort(grams)} ${extraWord}`}</span>;
+  return <span className="text-[var(--ink-faint)]">—</span>;
+};
 
 const quickRanges = [
   { key: "today", label: "Today" },
   { key: "yesterday", label: "Yesterday" },
-  { key: "week", label: "This Week" },
-  { key: "month", label: "This Month" },
-  { key: "all", label: "All Time" },
+  { key: "week", label: "This week" },
+  { key: "month", label: "This month" },
+  { key: "all", label: "All time" },
 ];
 
 const rangeToDates = (key) => {
@@ -87,11 +99,9 @@ const KhulaReport = () => {
 
   return (
     <div className="flex flex-col gap-6">
-      <h2 className="font-display text-xl font-semibold text-[var(--color-coffee)]">
-        Khula Batch Record — Opened, Closed &amp; Shortage
-      </h2>
+      <h2 className="page-title">Khula record</h2>
 
-      <div className="grain-card p-4 flex flex-wrap items-end gap-3">
+      <div className="filter-bar">
         <div className="segmented">
           {quickRanges.map((r) => (
             <button
@@ -123,7 +133,7 @@ const KhulaReport = () => {
           <input type="date" className="field-input" value={customTo} onChange={(e) => { setCustomTo(e.target.value); setMonth(""); }} />
         </div>
         <div>
-          <label className="field-label">Rice Type</label>
+          <label className="field-label">Rice type</label>
           <select className="field-input" value={riceType} onChange={(e) => setRiceType(e.target.value)}>
             <option value="">All</option>
             {riceTypes.map((rt) => (
@@ -145,53 +155,88 @@ const KhulaReport = () => {
       ) : (
         <>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <StatCard label="Batches Closed" value={summary.totalBatches} accent="coffee" />
-            <StatCard label="Marked Over (short)" value={summary.overCount} accent="terracotta" />
-            <StatCard label="Finished Exactly" value={summary.finishedCount} accent="sage" />
-            <StatCard label="Total Shortfall" value={formatGrams(summary.totalShortfallGrams)} accent="wheat" />
+            <StatCard
+              label="Total shortfall"
+              value={formatShort(summary.totalShortGrams)}
+              sub="when weighed + when ended"
+              accent="terracotta"
+            />
+            <StatCard
+              label="Short when weighed"
+              value={formatShort(summary.openingShortGrams)}
+              sub={`${summary.boriOpenedCount} bori opened`}
+              accent="wheat"
+            />
+            <StatCard
+              label="Short when batch ended"
+              value={formatShort(summary.endingShortGrams)}
+              sub={`${summary.overCount} ended early`}
+              accent="wheat"
+            />
+            <StatCard
+              label="Lots closed"
+              value={summary.closedCount}
+              sub={`${summary.finishedCount} finished, ${summary.overCount} ended early`}
+              accent="coffee"
+            />
           </div>
+          {summary.openingShortGrams < 0 && (
+            <p className="text-xs text-[var(--ink-muted)] -mt-3">Some bori weighed more than their size; that extra is taken off the total.</p>
+          )}
 
           <div className="grain-card overflow-x-auto">
-            <table className="w-full text-sm min-w-[820px]">
+            <table className="w-full text-sm min-w-[980px]">
               <thead>
-                <tr className="text-left text-[var(--color-coffee-soft)] border-b border-[var(--color-husk)]">
-                  <th className="py-3 px-4 font-medium">Rice Type</th>
-                  <th className="py-3 px-4 font-medium">Bori</th>
-                  <th className="py-3 px-4 font-medium">Opened</th>
-                  <th className="py-3 px-4 font-medium">Opened By</th>
-                  <th className="py-3 px-4 font-medium">Closed</th>
-                  <th className="py-3 px-4 font-medium">Closed By</th>
-                  <th className="py-3 px-4 font-medium">Status</th>
-                  <th className="py-3 px-4 font-medium text-right">Shortfall</th>
+                <tr className="text-left border-b border-[var(--line)]">
+                  <th className="py-3 px-4">Rice type</th>
+                  <th className="py-3 px-4">Lot</th>
+                  <th className="py-3 px-4">Opened</th>
+                  <th className="py-3 px-4 text-right">Short when weighed</th>
+                  <th className="py-3 px-4">Closed</th>
+                  <th className="py-3 px-4">Status</th>
+                  <th className="py-3 px-4 text-right">Short at end</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[var(--color-husk)]">
-                {batches.map((b) => (
-                  <tr key={b._id}>
-                    <td className="py-2.5 px-4">{b.riceType?.name}</td>
-                    <td className="py-2.5 px-4">{b.boriSize} KG</td>
-                    <td className="py-2.5 px-4 whitespace-nowrap">{formatDateTime(b.createdAt)}</td>
-                    <td className="py-2.5 px-4">{b.openedBy?.name || "—"}</td>
-                    <td className="py-2.5 px-4 whitespace-nowrap">{b.closedAt ? formatDateTime(b.closedAt) : "—"}</td>
-                    <td className="py-2.5 px-4">{b.closedBy?.name || "—"}</td>
-                    <td className="py-2.5 px-4">
-                      <span className={`badge ${b.status === "OVER" ? "badge-over" : "badge-finished"}`}>{b.status}</span>
-                    </td>
-                    <td className="py-2.5 px-4 text-right font-semibold">
-                      {b.shortfallGrams > 0 ? formatGrams(b.shortfallGrams) : "—"}
-                    </td>
-                  </tr>
-                ))}
+              <tbody className="divide-y divide-[var(--line)]">
+                {batches.map((b) => {
+                  const isBori = !b.source || b.source === "BORI";
+                  return (
+                    <tr key={b._id} className="align-top">
+                      <td className="py-2.5 px-4">{b.riceType?.name}</td>
+                      <td className="py-2.5 px-4 whitespace-nowrap">
+                        {khulaSourceLabel(b)}
+                        <span className="block text-xs text-[var(--ink-faint)]">
+                          {isBori ? `weighed ${formatGrams(b.totalGrams)}` : formatGrams(b.totalGrams)}
+                        </span>
+                      </td>
+                      <td className="py-2.5 px-4 whitespace-nowrap">
+                        {formatDateTime(b.createdAt)}
+                        <span className="block text-xs text-[var(--ink-faint)]">{b.openedBy?.name || "—"}</span>
+                      </td>
+                      <td className="py-2.5 px-4 text-right">{isBori ? shortCell(b.openingShortGrams || 0) : shortCell(0)}</td>
+                      <td className="py-2.5 px-4 whitespace-nowrap">
+                        {b.closedAt ? formatDateTime(b.closedAt) : <span className="text-[var(--ink-faint)]">Still open</span>}
+                        {b.closedBy?.name && <span className="block text-xs text-[var(--ink-faint)]">{b.closedBy.name}</span>}
+                      </td>
+                      <td className="py-2.5 px-4">
+                        {statusBadge(b)}
+                        {b.note && <span className="block text-xs text-[var(--ink-muted)] mt-1 max-w-[220px]">{b.note}</span>}
+                      </td>
+                      <td className="py-2.5 px-4 text-right">{b.status === "ACTIVE" ? shortCell(0) : shortCell(b.shortfallGrams || 0)}</td>
+                    </tr>
+                  );
+                })}
                 {!batches.length && (
                   <tr>
-                    <td colSpan={8} className="py-8 text-center text-[var(--color-coffee-soft)]">
-                      No closed Khula batches in this range
+                    <td colSpan={7} className="py-8 text-center text-[var(--ink-muted)]">
+                      No khula lots opened or closed in these dates
                     </td>
                   </tr>
                 )}
               </tbody>
             </table>
           </div>
+          <p className="text-xs text-[var(--ink-faint)] -mt-3">Shortfall counts when a bori is weighed and when a batch ends.</p>
         </>
       )}
     </div>

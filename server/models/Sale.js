@@ -7,6 +7,20 @@ const saleItemSchema = new mongoose.Schema(
     riceTypeName: { type: String, required: true }, // snapshot for invoice printing
     boriSize: { type: Number, enum: [25, 50] }, // for bori items, or which bori the khula batch came from
     khulaBatch: { type: mongoose.Schema.Types.ObjectId, ref: "KhulaBatch" },
+    // Khula items take rice from their type's khula, oldest lot first: which lots and how much.
+    khulaAllocations: {
+      type: [
+        new mongoose.Schema(
+          {
+            batch: { type: mongoose.Schema.Types.ObjectId, ref: "KhulaBatch" },
+            grams: Number,
+            costPerKg: Number,
+          },
+          { _id: false }
+        ),
+      ],
+      default: undefined,
+    },
     quantityGrams: { type: Number }, // for khula items
     quantityBori: { type: Number }, // for bori items
     pricePerUnit: { type: Number, required: true }, // per KG for khula, per bori for bori

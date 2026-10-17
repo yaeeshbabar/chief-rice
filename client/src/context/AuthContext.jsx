@@ -24,12 +24,22 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
   }, []);
 
+  // e.g. after the admin changes their own name in Settings
+  const updateMe = useCallback((patch) => {
+    setUser((prev) => {
+      if (!prev) return prev;
+      const next = { ...prev, ...patch };
+      localStorage.setItem("crt_user", JSON.stringify(next));
+      return next;
+    });
+  }, []);
+
   useEffect(() => {
     setLoading(false);
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, loading }}>
+    <AuthContext.Provider value={{ user, login, logout, loading, updateMe }}>
       {children}
     </AuthContext.Provider>
   );

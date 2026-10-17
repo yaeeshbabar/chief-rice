@@ -26,7 +26,7 @@ const CashInStoreCard = () => {
   return (
     <div className="grain-card p-4">
       <div className="flex items-center justify-between mb-1">
-        <h3 className="font-display font-semibold text-[var(--color-coffee)]">Cash in Store</h3>
+        <h3 className="section-title">Cash in store</h3>
         {revealed && (
           <button
             className="inline-flex items-center gap-1.5 text-xs font-medium text-[var(--ink-muted)] hover:text-[var(--ink)]"
@@ -42,10 +42,10 @@ const CashInStoreCard = () => {
         <div className="flex flex-col items-center gap-2 py-6">
           <LockKeyhole size={24} strokeWidth={1.75} className="text-[var(--ink-faint)]" />
           <p className="text-sm text-[var(--color-coffee-soft)] text-center">
-            Hidden by default. Only reveal this when you need to check it.
+            Hidden until you tap Show.
           </p>
           <button className="btn-outline text-sm" onClick={reveal} disabled={loading}>
-            {loading ? "Checking..." : "Show Cash in Store"}
+            {loading ? "Checking..." : "Show cash in store"}
           </button>
           {error && <p className="text-xs text-[var(--color-terracotta-deep)]">{error}</p>}
         </div>
@@ -58,11 +58,11 @@ const CashInStoreCard = () => {
 
           <div className="grid grid-cols-2 gap-3">
             <div className="bg-[var(--color-cream-deep)] rounded-lg p-3">
-              <p className="text-xs text-[var(--color-coffee-soft)]">Physical Cash (counter)</p>
+              <p className="text-xs text-[var(--color-coffee-soft)]">Cash in counter</p>
               <p className="font-display font-semibold">{formatMoney(data.cashInCounter)}</p>
             </div>
             <div className="bg-[var(--color-cream-deep)] rounded-lg p-3">
-              <p className="text-xs text-[var(--color-coffee-soft)]">Salesman's Account</p>
+              <p className="text-xs text-[var(--color-coffee-soft)]">Salesman's account</p>
               <p className="font-display font-semibold">{formatMoney(data.cashInSalesmanAccount)}</p>
             </div>
           </div>
@@ -79,12 +79,10 @@ const CashInStoreCard = () => {
               </div>
             ))}
             <div className="flex justify-between text-sm pt-1.5 border-t border-[var(--color-husk)]">
-              <span className="font-semibold">Cash that is the owner's (counter − reserved)</span>
+              <span className="font-semibold">Owner's cash (counter − reserved)</span>
               <span className="font-display font-semibold">{formatMoney(data.freeCashInCounter)}</span>
             </div>
-            <p className="text-[0.7rem] text-[var(--color-coffee-soft)]">
-              The reserved part is not the owner's money — it is waiting to be handed to the salesmen above.
-            </p>
+            <p className="text-[0.7rem] text-[var(--color-coffee-soft)]">Reserved money is for the salesmen above.</p>
           </div>
 
           <div className="mt-1 flex flex-col divide-y divide-[var(--color-husk)] text-sm">
@@ -125,10 +123,7 @@ const CashInStoreCard = () => {
               <span>{formatMoney(data.breakdown.accountHandedOver)}</span>
             </div>
           </div>
-          <p className="text-xs text-[var(--color-coffee-soft)] italic">
-            Money creditors pay directly into one of Asim's accounts is recorded for their balance and profit, but
-            never counted here since it never passes through the salesman.
-          </p>
+          <p className="text-xs text-[var(--color-coffee-soft)]">Online payments into Asim's accounts are not counted here.</p>
         </div>
       )}
     </div>

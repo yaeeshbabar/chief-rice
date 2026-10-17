@@ -86,8 +86,7 @@ const InvoiceView = ({ role }) => {
         items: form.items.map((i) => ({
           itemType: i.itemType,
           riceTypeId: i.riceTypeId,
-          boriSize: i.boriSize,
-          khulaBatchId: i.khulaBatch,
+          boriSize: i.itemType === "bori" ? i.boriSize : undefined,
           quantityGrams: i.quantityGrams,
           quantityBori: i.quantityBori,
           pricePerUnit: i.pricePerUnit,
@@ -201,7 +200,7 @@ const InvoiceView = ({ role }) => {
                 {sale.customer.phone && <p className="text-[var(--color-coffee-soft)]">{sale.customer.phone}</p>}
               </>
             ) : (
-              <p className="font-semibold">Walk-in Customer (Cash)</p>
+              <p className="font-semibold">Walk-in customer (cash)</p>
             )}
           </div>
           <div className="text-right">
@@ -271,7 +270,7 @@ const InvoiceView = ({ role }) => {
             )}
             {sale.rideCost > 0 && (
               <div className="flex justify-between py-2">
-                <span className="text-[var(--color-coffee-soft)]">Ride / delivery cost (store expense)</span>
+                <span className="text-[var(--color-coffee-soft)]">Delivery cost (shop pays)</span>
                 <span>{formatMoney(sale.rideCost)}</span>
               </div>
             )}
@@ -284,7 +283,7 @@ const InvoiceView = ({ role }) => {
               </div>
             ) : (
               <div className="flex justify-between py-2">
-                <span className="text-[var(--color-coffee-soft)]">Commission agent</span>
+                <span className="text-[var(--color-coffee-soft)]">Commission salesman</span>
                 <span>None selected on this bill</span>
               </div>
             )}
@@ -298,15 +297,12 @@ const InvoiceView = ({ role }) => {
             )}
           </div>
           {sale.commissionAgent && sale.commissionAmount === 0 && (
-            <p className="text-xs text-[var(--color-terracotta-deep)] mt-2">
-              An agent was selected but this bill's profit was zero or negative (sale price didn't clear the cost + ride
-              cost), so no commission was earned on it.
-            </p>
+            <p className="text-xs text-[var(--color-terracotta-deep)] mt-2">No commission: this bill made no profit.</p>
           )}
         </div>
       )}
 
-      <Modal open={showEdit} onClose={() => setShowEdit(false)} title={`Edit Invoice #${sale.invoiceNumber}`} wide>
+      <Modal open={showEdit} onClose={() => setShowEdit(false)} title={`Edit invoice #${sale.invoiceNumber}`} wide>
         {form && (
           <form onSubmit={submitEdit} className="flex flex-col gap-4">
             <div className="flex flex-col gap-2">
@@ -320,7 +316,7 @@ const InvoiceView = ({ role }) => {
                   </div>
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
                     <div className="col-span-2 sm:col-span-1">
-                      <label className="field-label">Rice Type</label>
+                      <label className="field-label">Rice type</label>
                       <select
                         className="field-input"
                         value={item.riceTypeId}
@@ -355,7 +351,7 @@ const InvoiceView = ({ role }) => {
                       </div>
                     )}
                     <div>
-                      <label className="field-label">Price / Unit (Rs)</label>
+                      <label className="field-label">Price per unit (Rs)</label>
                       <input
                         type="number"
                         className="field-input"
@@ -367,13 +363,13 @@ const InvoiceView = ({ role }) => {
                 </div>
               ))}
               <p className="text-xs text-[var(--color-coffee-soft)]">
-                Note: changing rice type on a Khula item keeps it linked to the same batch — only change type between
-                rice types that share that batch, or delete and re-bill instead for a clean switch.
+                Khula items come from that rice type&apos;s khula. When you save, the old rice goes back to khula and
+                the new amount is taken again, so changing the rice type or quantity keeps khula correct.
               </p>
             </div>
 
             <div>
-              <label className="field-label">Payment Type</label>
+              <label className="field-label">Payment type</label>
               <div className="flex gap-2">
                 <button
                   type="button"
@@ -404,8 +400,11 @@ const InvoiceView = ({ role }) => {
             )}
 
             <div>
-              <label className="field-label">Reason for edit (kept in the invoice's history)</label>
+              <label className="field-label" htmlFor="edit-reason">
+                Reason for edit
+              </label>
               <input
+                id="edit-reason"
                 className="field-input"
                 value={form.editNote}
                 onChange={(e) => setForm({ ...form, editNote: e.target.value })}
@@ -415,18 +414,15 @@ const InvoiceView = ({ role }) => {
             </div>
             {error && <p className="text-sm text-[var(--color-terracotta-deep)]">{error}</p>}
             <button className="btn-primary" disabled={saving}>
-              {saving ? "Saving..." : "Save Changes"}
+              {saving ? "Saving..." : "Save changes"}
             </button>
           </form>
         )}
       </Modal>
 
-      <Modal open={showCancel} onClose={() => setShowCancel(false)} title="Delete / Cancel Invoice">
+      <Modal open={showCancel} onClose={() => setShowCancel(false)} title="Delete invoice">
         <form onSubmit={submitCancel} className="flex flex-col gap-3">
-          <p className="text-sm text-[var(--color-coffee-soft)]">
-            This reverts all stock/khata effects of this bill but keeps a permanent record for the Changes Report -
-            it's never truly erased.
-          </p>
+          <p className="text-sm text-[var(--color-coffee-soft)]">Stock and khata go back. The bill stays in the Changes report.</p>
           <div>
             <label className="field-label">Reason (required)</label>
             <input className="field-input" value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} required autoFocus />
@@ -438,7 +434,7 @@ const InvoiceView = ({ role }) => {
         </form>
       </Modal>
 
-      <Modal open={showHistory} onClose={() => setShowHistory(false)} title="Version History" wide>
+      <Modal open={showHistory} onClose={() => setShowHistory(false)} title="Version history" wide>
         <div className="flex flex-col gap-3">
           {sale.previousVersions?.map((v, idx) => (
             <div key={idx} className="grain-card p-3">
@@ -452,7 +448,7 @@ const InvoiceView = ({ role }) => {
                 By {v.changedBy?.name} {v.note && `— "${v.note}"`}
               </p>
               <p className="text-sm text-[var(--color-coffee-soft)]">
-                Was: {v.paymentType} · {v.customerName || "Walk-in"} · Total {formatMoney(v.total)}
+                Was: {v.paymentType}, {v.customerName || "Walk-in"}, total {formatMoney(v.total)}
               </p>
             </div>
           ))}

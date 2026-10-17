@@ -1,15 +1,17 @@
 import { useEffect, useState } from "react";
+import { Undo2 } from "lucide-react";
 import api from "../api/axios.js";
 import Loader from "../components/Loader.jsx";
+import ReasonModal from "../components/ReasonModal.jsx";
 import CashInStoreCard from "../components/CashInStoreCard.jsx";
 import { formatMoney, formatMoneyUrdu, formatDateTime, monthBounds } from "../utils/format.js";
 import { useAuth } from "../context/AuthContext.jsx";
 
 const quickRanges = [
-  { key: "all", label: "All Time" },
+  { key: "all", label: "All time" },
   { key: "today", label: "Today" },
-  { key: "week", label: "This Week" },
-  { key: "month", label: "This Month" },
+  { key: "week", label: "This week" },
+  { key: "month", label: "This month" },
 ];
 
 const Cash = () => {
@@ -29,6 +31,9 @@ const Cash = () => {
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
   const [month, setMonth] = useState("");
+  const [undoTarget, setUndoTarget] = useState(null);
+  // Bumped after a handover is added or undone so the money card reloads
+  const [poolsVersion, setPoolsVersion] = useState(0);
 
   const selectMonth = (value) => {
     setMonth(value);
@@ -99,6 +104,7 @@ const Cash = () => {
       setSuccess(created.warning || "Recorded successfully");
       setAmount("");
       setNote("");
+      setPoolsVersion((v) => v + 1);
       load();
     } catch (err) {
       setError(err?.response?.data?.message || "Could not record this handover");
@@ -109,19 +115,17 @@ const Cash = () => {
 
   return (
     <div className="flex flex-col gap-6">
-      <h2 className="font-display text-xl font-semibold text-[var(--color-coffee)]">Cash Handling</h2>
+      <h2 className="page-title">Cash</h2>
 
       <div className="grid lg:grid-cols-3 gap-6">
-        <CashInStoreCard />
+        <CashInStoreCard key={poolsVersion} />
 
         <div className="grain-card p-4 flex flex-col gap-3 h-fit">
-          <h3 className="font-display font-semibold text-[var(--color-coffee)]">
-            {user?.role === "admin" ? "Log Cash/Transfer Collected" : "Hand Over to Asim"}
+          <h3 className="section-title">
+            {user?.role === "admin" ? "Log money collected" : "Hand over to Asim"}
           </h3>
           <p className="text-xs text-[var(--color-coffee-soft)] -mt-2">
-            {user?.role === "admin"
-              ? "Record what you collected from the salesman during your store visit."
-              : "Record what you're handing to Asim - from the cash counter, or from your own account."}
+            {user?.role === "admin" ? "What you took from the salesman." : "Cash, or a transfer from your account."}
           </p>
           <form onSubmit={handleSubmit} className="flex flex-col gap-3">
             <div>
@@ -132,14 +136,14 @@ const Cash = () => {
                   onClick={() => setSource("cash")}
                   className={`flex-1 rounded-lg border py-2 text-sm font-semibold ${source === "cash" ? "border-[var(--color-wheat)] bg-[var(--color-cream-deep)]" : "border-[var(--color-husk)]"}`}
                 >
-                  Cash Counter
+                  Cash counter
                 </button>
                 <button
                   type="button"
                   onClick={() => setSource("account")}
                   className={`flex-1 rounded-lg border py-2 text-sm font-semibold ${source === "account" ? "border-[var(--color-wheat)] bg-[var(--color-cream-deep)]" : "border-[var(--color-husk)]"}`}
                 >
-                  Salesman Account
+                  Salesman account
                 </button>
               </div>
             </div>
@@ -164,13 +168,13 @@ const Cash = () => {
             {error && <p className="text-sm text-[var(--color-terracotta-deep)]">{error}</p>}
             {success && <p className="text-sm text-[var(--color-sage-deep)]">{success}</p>}
             <button className="btn-primary" disabled={saving}>
-              {saving ? "Saving..." : "Record Handover"}
+              {saving ? "Saving..." : "Record handover"}
             </button>
           </form>
         </div>
 
         <div className="grain-card p-4">
-          <p className="text-xs text-[var(--color-coffee-soft)]">Total Handed Over (this filter)</p>
+          <p className="text-xs text-[var(--color-coffee-soft)]">Total handed over</p>
           <p className="font-display text-2xl font-semibold text-[var(--color-wheat-dark)]">{formatMoney(totalHandedOver)}</p>
           <p className="text-xs text-[var(--color-coffee-soft)]">≈ {formatMoneyUrdu(totalHandedOver)}</p>
         </div>
@@ -178,7 +182,7 @@ const Cash = () => {
 
       <div className="grain-card overflow-x-auto">
         <div className="px-4 pt-4 flex flex-wrap items-center justify-between gap-3">
-          <h3 className="font-display font-semibold text-[var(--color-coffee)]">Handover History</h3>
+          <h3 className="section-title">Handover history</h3>
           <div className="segmented">
             {quickRanges.map((r) => (
               <button
@@ -222,9 +226,12 @@ const Cash = () => {
               <tr className="text-left text-[var(--color-coffee-soft)] border-b border-[var(--color-husk)]">
                 <th className="py-3 px-4 font-medium">Date</th>
                 <th className="py-3 px-4 font-medium">From</th>
-                <th className="py-3 px-4 font-medium">Recorded By</th>
+                <th className="py-3 px-4 font-medium">Recorded by</th>
                 <th className="py-3 px-4 font-medium">Note</th>
                 <th className="py-3 px-4 font-medium text-right">Amount</th>
+                <th className="relative py-3 px-2 w-12">
+                  <span className="sr-only">Undo</span>
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--color-husk)]">
@@ -237,11 +244,16 @@ const Cash = () => {
                   </td>
                   <td className="py-2.5 px-4">{h.note || "—"}</td>
                   <td className="py-2.5 px-4 text-right font-semibold">{formatMoney(h.amount)}</td>
+                  <td className="py-1 px-2">
+                    <button className="icon-btn h-8 w-8" onClick={() => setUndoTarget(h)} title="Undo this handover" aria-label="Undo this handover">
+                      <Undo2 size={15} />
+                    </button>
+                  </td>
                 </tr>
               ))}
               {!handovers.length && (
                 <tr>
-                  <td colSpan={5} className="py-8 text-center text-[var(--color-coffee-soft)]">
+                  <td colSpan={6} className="py-8 text-center text-[var(--color-coffee-soft)]">
                     No cash handovers recorded yet
                   </td>
                 </tr>
@@ -250,6 +262,30 @@ const Cash = () => {
           </table>
         )}
       </div>
+
+      <ReasonModal
+        open={!!undoTarget}
+        onClose={() => setUndoTarget(null)}
+        title="Undo this handover?"
+        confirmLabel="Undo handover"
+        danger
+        placeholder="e.g. wrong amount, will enter again"
+        onConfirm={async (reason) => {
+          await api.delete(`/cash-handovers/${undoTarget._id}`, { data: { reason } });
+          setUndoTarget(null);
+          setPoolsVersion((v) => v + 1);
+          load();
+        }}
+      >
+        {undoTarget && (
+          <p>
+            {formatMoney(undoTarget.amount)} from {undoTarget.source === "account" ? "the salesman account" : "the cash counter"} on{" "}
+            {formatDateTime(undoTarget.createdAt)}. The money will count as back in{" "}
+            {undoTarget.source === "account" ? "the salesman account" : "the counter"}. If the amount was wrong, undo it and record the right
+            one.
+          </p>
+        )}
+      </ReasonModal>
     </div>
   );
 };

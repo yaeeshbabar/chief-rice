@@ -9,6 +9,9 @@ import Expense from "../models/Expense.js";
 import CommissionAgent from "../models/CommissionAgent.js";
 import { nextSequence } from "../models/Counter.js";
 import { asyncHandler } from "../middleware/errorHandler.js";
+import { takeFromKhula, giveBackToKhula } from "../utils/khulaPools.js";
+import { kgText } from "../utils/changeLog.js";
+import { accountProblem } from "../utils/accountCheck.js";
 
 // Applies the stock/khula-effects of a set of sale items (used on create and on revert).
 // direction: 1 to deduct stock (a sale happening), -1 to restore stock (reverting an edit/cancel)
@@ -20,50 +23,48 @@ const applyItemEffects = async (items, userId, direction = 1) => {
     if (!riceType) throw Object.assign(new Error("Rice type not found"), { statusCode: 404 });
 
     if (itemType === "khula") {
-      if (!khulaBatchId || !quantityGrams || quantityGrams <= 0) {
-        throw Object.assign(new Error("Khula batch and quantity are required"), { statusCode: 400 });
+      if (!quantityGrams || quantityGrams <= 0) {
+        throw Object.assign(new Error("Khula quantity is required"), { statusCode: 400 });
       }
-      const batch = await KhulaBatch.findById(khulaBatchId);
-      if (!batch) throw Object.assign(new Error("Khula batch not found"), { statusCode: 404 });
+
+      const grams = Number(quantityGrams);
+      const total = (grams / 1000) * Number(pricePerUnit);
 
       if (direction === 1) {
-        if (batch.status !== "ACTIVE") {
-          throw Object.assign(new Error(`This Khula batch is ${batch.status.toLowerCase()}, cannot sell from it`), {
-            statusCode: 400,
-          });
-        }
-        if (batch.remainingGrams < quantityGrams) {
-          throw Object.assign(
-            new Error(`Not enough loose rice remaining in this Khula batch (only ${batch.remainingGrams}g left)`),
-            { statusCode: 400 }
-          );
-        }
-        batch.remainingGrams -= quantityGrams;
+        // Sold from this rice type's khula (all its opened bori, loose and returned rice together),
+        // oldest lot first. The lots used are saved on the item so an edit/cancel puts it back exactly.
+        const allocations = await takeFromKhula(riceType, grams, userId);
+        const itemCost = allocations.reduce((sum, a) => sum + (a.grams / 1000) * a.costPerKg, 0);
+        preparedItems.push({
+          itemType: "khula",
+          riceType: riceType._id,
+          riceTypeName: riceType.name,
+          khulaAllocations: allocations,
+          quantityGrams: grams,
+          pricePerUnit: Number(pricePerUnit),
+          total,
+          purchaseCostPerUnit: grams > 0 ? itemCost / (grams / 1000) : 0,
+          itemCost,
+        });
       } else {
-        batch.remainingGrams = Math.min(batch.totalGrams, batch.remainingGrams + quantityGrams);
-        if (batch.status !== "ACTIVE") batch.status = "ACTIVE";
+        // Reverting a bill: put the rice back into the lots it was taken from.
+        // Bills made before khula was kept per rice type took it from one batch.
+        if (raw.khulaAllocations && raw.khulaAllocations.length) {
+          await giveBackToKhula(raw.khulaAllocations);
+        } else if (khulaBatchId) {
+          await giveBackToKhula([{ batch: khulaBatchId, grams }]);
+        }
+        preparedItems.push({
+          itemType: "khula",
+          riceType: riceType._id,
+          riceTypeName: riceType.name,
+          quantityGrams: grams,
+          pricePerUnit: Number(pricePerUnit),
+          total,
+          purchaseCostPerUnit: 0,
+          itemCost: 0,
+        });
       }
-      await batch.save();
-
-      const total = (quantityGrams / 1000) * Number(pricePerUnit);
-
-      // Cost snapshot for profit reporting - from that rice/size's last purchase price.
-      const stockForCost = await Stock.findOne({ riceType: riceType._id, boriSize: batch.boriSize });
-      const costPerKg = stockForCost && batch.boriSize ? (stockForCost.lastPricePerBori || 0) / batch.boriSize : 0;
-      const itemCost = (quantityGrams / 1000) * costPerKg;
-
-      preparedItems.push({
-        itemType: "khula",
-        riceType: riceType._id,
-        riceTypeName: riceType.name,
-        boriSize: batch.boriSize,
-        khulaBatch: batch._id,
-        quantityGrams,
-        pricePerUnit: Number(pricePerUnit),
-        total,
-        purchaseCostPerUnit: costPerKg,
-        itemCost,
-      });
     } else if (itemType === "bori") {
       if (!boriSize || !quantityBori || quantityBori <= 0) {
         throw Object.assign(new Error("Bori size and quantity are required"), { statusCode: 400 });
@@ -114,6 +115,71 @@ const applyItemEffects = async (items, userId, direction = 1) => {
   return preparedItems;
 };
 
+// Checks that every item on a bill can be filled BEFORE anything is changed, so a bill that
+// can't go through (not enough stock, missing rice type) never leaves stock half deducted.
+// When editing, pass the bill's current items: their rice is put back first, so it counts.
+const checkItemsCanBeFilled = async (newItems, oldItems = []) => {
+  const fail = (message, statusCode = 400) => {
+    throw Object.assign(new Error(message), { statusCode });
+  };
+  const names = new Map();
+  const boriNeed = new Map();
+  const khulaNeed = new Map();
+  for (const it of newItems) {
+    const riceType = it.riceTypeId ? await RiceType.findById(it.riceTypeId) : null;
+    if (!riceType) fail("Rice type not found", 404);
+    const typeKey = String(riceType._id);
+    names.set(typeKey, riceType.name);
+    if (it.itemType === "khula") {
+      const grams = Number(it.quantityGrams);
+      if (!grams || grams <= 0) fail("Khula quantity is required");
+      khulaNeed.set(typeKey, (khulaNeed.get(typeKey) || 0) + grams);
+    } else if (it.itemType === "bori") {
+      const qty = Number(it.quantityBori);
+      if (!it.boriSize || !qty || qty <= 0) fail("Bori size and quantity are required");
+      const key = `${typeKey}|${Number(it.boriSize)}`;
+      boriNeed.set(key, (boriNeed.get(key) || 0) + qty);
+    } else {
+      fail("Invalid item type");
+    }
+  }
+
+  const boriBack = new Map();
+  const khulaBack = new Map();
+  for (const it of oldItems) {
+    if (it.itemType === "bori") {
+      const key = `${it.riceType?._id || it.riceType}|${it.boriSize}`;
+      boriBack.set(key, (boriBack.get(key) || 0) + (it.quantityBori || 0));
+    } else if (it.itemType === "khula") {
+      const parts = it.khulaAllocations?.length
+        ? it.khulaAllocations
+        : it.khulaBatch
+          ? [{ batch: it.khulaBatch, grams: it.quantityGrams }]
+          : [];
+      for (const part of parts) {
+        const batch = await KhulaBatch.findById(part.batch);
+        if (!batch) continue;
+        const key = String(batch.riceType);
+        khulaBack.set(key, (khulaBack.get(key) || 0) + (part.grams || 0));
+      }
+    }
+  }
+
+  for (const [key, qty] of boriNeed) {
+    const [riceTypeId, size] = key.split("|");
+    const stock = await Stock.findOne({ riceType: riceTypeId, boriSize: Number(size) });
+    const available = (stock?.quantity || 0) + (boriBack.get(key) || 0);
+    if (available < qty) {
+      fail(`Not enough ${size}KG bori of ${names.get(riceTypeId)} in stock (only ${available} left)`);
+    }
+  }
+  for (const [riceTypeId, grams] of khulaNeed) {
+    const active = await KhulaBatch.find({ riceType: riceTypeId, status: "ACTIVE" });
+    const available = active.reduce((sum, b) => sum + b.remainingGrams, 0) + (khulaBack.get(riceTypeId) || 0);
+    if (available < grams) fail(`Only ${kgText(available)} of ${names.get(riceTypeId)} is left in khula`);
+  }
+};
+
 // Deletes any previous ride-cost Expense for this sale and creates a fresh one if needed.
 // Recreating rather than patching avoids drift across repeated edits.
 const syncRideExpense = async (sale, rideCost, userId) => {
@@ -144,6 +210,16 @@ const computeCommission = async (commissionAgentId, profitBeforeCommission) => {
   return { commissionAgent: agent._id, commissionPercent: agent.percentage, commissionAmount };
 };
 
+// A turned-off or deleted commission salesman can't be put on a bill (e.g. from a page that was
+// open before the delete). An old bill that already has them keeps them when it is edited.
+const agentProblem = async (agentId, currentId) => {
+  if (!agentId) return "";
+  if (currentId && String(agentId) === String(currentId)) return "";
+  const agent = await CommissionAgent.findById(agentId).catch(() => null);
+  if (!agent || agent.deleted || !agent.active) return "This commission salesman is turned off or deleted. Pick another.";
+  return "";
+};
+
 const snapshotOf = (sale, action, changedBy, note) => ({
   items: sale.items,
   paymentType: sale.paymentType,
@@ -167,6 +243,13 @@ export const createSale = asyncHandler(async (req, res) => {
   if (!["cash", "credit"].includes(paymentType)) {
     return res.status(400).json({ message: "Payment type must be cash or credit" });
   }
+  const agentError = await agentProblem(commissionAgentId);
+  if (agentError) return res.status(400).json({ message: agentError });
+  if (paymentType === "cash" && paymentMethod === "online") {
+    const accountError = await accountProblem(accountId);
+    if (accountError) return res.status(400).json({ message: accountError });
+  }
+  await checkItemsCanBeFilled(items);
 
   let customer = null;
   if (paymentType === "credit") {
@@ -284,6 +367,41 @@ export const updateSale = asyncHandler(async (req, res) => {
   if (!sale) return res.status(404).json({ message: "Invoice not found" });
   if (sale.cancelled) return res.status(400).json({ message: "This invoice was cancelled" });
 
+  const revertItems = sale.items.map((i) => ({
+    itemType: i.itemType,
+    riceTypeId: i.riceType,
+    boriSize: i.boriSize,
+    khulaBatchId: i.khulaBatch,
+    khulaAllocations: i.khulaAllocations,
+    quantityGrams: i.quantityGrams,
+    quantityBori: i.quantityBori,
+    pricePerUnit: i.pricePerUnit,
+  }));
+  const newItems = items && items.length ? items : revertItems;
+
+  // Check everything first, so an edit that can't go through changes nothing.
+  const newPaymentType = paymentType || sale.paymentType;
+  let customerIdToUse = null;
+  if (newPaymentType === "credit") {
+    if (customerId) {
+      if (!(await Customer.exists({ _id: customerId }))) return res.status(404).json({ message: "Customer not found" });
+      customerIdToUse = customerId;
+    } else if (newCustomer && newCustomer.name) {
+      // created below, once the edit is sure to go through
+    } else if (sale.customer) {
+      customerIdToUse = sale.customer._id || sale.customer;
+    } else {
+      return res.status(400).json({ message: "Select a customer for credit sale" });
+    }
+  }
+  const agentError = await agentProblem(commissionAgentId, sale.commissionAgent);
+  if (agentError) return res.status(400).json({ message: agentError });
+  if (newPaymentType === "cash" && (paymentMethod || sale.paymentMethod) === "online") {
+    const accountError = await accountProblem(accountId, sale.account);
+    if (accountError) return res.status(400).json({ message: accountError });
+  }
+  await checkItemsCanBeFilled(newItems, sale.items);
+
   // Snapshot BEFORE any change is applied.
   sale._customerName = sale.customer?.name || "";
   const agentBefore = sale.commissionAgent ? await CommissionAgent.findById(sale.commissionAgent) : null;
@@ -299,25 +417,14 @@ export const updateSale = asyncHandler(async (req, res) => {
     }
   }
   // Revert old stock/khula effects
-  const revertItems = sale.items.map((i) => ({
-    itemType: i.itemType,
-    riceTypeId: i.riceType,
-    boriSize: i.boriSize,
-    khulaBatchId: i.khulaBatch,
-    quantityGrams: i.quantityGrams,
-    quantityBori: i.quantityBori,
-    pricePerUnit: i.pricePerUnit,
-  }));
   await applyItemEffects(revertItems, req.user._id, -1);
 
-  // Apply new items/effects
+  // Apply new items/effects (customer is loaded after the revert so its balance is current)
   let customer = null;
-  const newPaymentType = paymentType || sale.paymentType;
   if (newPaymentType === "credit") {
-    if (customerId) {
-      customer = await Customer.findById(customerId);
-      if (!customer) return res.status(404).json({ message: "Customer not found" });
-    } else if (newCustomer && newCustomer.name) {
+    if (customerIdToUse) {
+      customer = await Customer.findById(customerIdToUse);
+    } else {
       customer = await Customer.create({
         name: newCustomer.name.trim(),
         shopName: newCustomer.shopName || "",
@@ -325,14 +432,9 @@ export const updateSale = asyncHandler(async (req, res) => {
         address: newCustomer.address || "",
         createdBy: req.user._id,
       });
-    } else if (sale.customer) {
-      customer = await Customer.findById(sale.customer._id || sale.customer);
-    } else {
-      return res.status(400).json({ message: "Select a customer for credit sale" });
     }
   }
 
-  const newItems = items && items.length ? items : revertItems;
   const preparedItems = await applyItemEffects(newItems, req.user._id, 1);
   const subtotal = preparedItems.reduce((sum, i) => sum + i.total, 0);
   const costOfGoods = preparedItems.reduce((sum, i) => sum + i.itemCost, 0);
@@ -407,6 +509,7 @@ export const cancelSale = asyncHandler(async (req, res) => {
     riceTypeId: i.riceType,
     boriSize: i.boriSize,
     khulaBatchId: i.khulaBatch,
+    khulaAllocations: i.khulaAllocations,
     quantityGrams: i.quantityGrams,
     quantityBori: i.quantityBori,
     pricePerUnit: i.pricePerUnit,

@@ -19,7 +19,7 @@ const AccountSelect = ({ value, onChange, className = "field-input" }) => {
       {salesmanAccounts.length > 0 && (
         <optgroup label="Salesman">
           {salesmanAccounts.length === 1 ? (
-            <option value={salesmanAccounts[0]._id}>Salesman Account</option>
+            <option value={salesmanAccounts[0]._id}>Salesman account</option>
           ) : (
             salesmanAccounts.map((a) => (
               <option key={a._id} value={a._id}>
@@ -30,7 +30,7 @@ const AccountSelect = ({ value, onChange, className = "field-input" }) => {
         </optgroup>
       )}
       {asimAccounts.length > 0 && (
-        <optgroup label="Asim's Accounts">
+        <optgroup label="Asim's accounts">
           {asimAccounts.map((a) => (
             <option key={a._id} value={a._id}>
               {a.bankName} — {a.accountNumber}
