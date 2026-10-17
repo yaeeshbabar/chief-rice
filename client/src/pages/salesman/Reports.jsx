@@ -3,6 +3,7 @@ import api from "../../api/axios.js";
 import StatCard from "../../components/StatCard.jsx";
 import Loader from "../../components/Loader.jsx";
 import KhulaContainers from "../../components/KhulaContainers.jsx";
+import WorthCard from "../../components/WorthCard.jsx";
 import { formatMoney, formatMoneyUrdu, formatGrams } from "../../utils/format.js";
 
 const ranges = [
@@ -37,6 +38,9 @@ const Reports = () => {
   const visibleStock = filterType ? stockOverview?.stock?.filter((s) => s.riceType?._id === filterType) : stockOverview?.stock;
   const visibleValue = (visibleStock || []).reduce((sum, s) => sum + valueOf(s), 0);
   const visibleBags = (visibleStock || []).reduce((sum, s) => sum + s.quantity, 0);
+  const visiblePools = (stockOverview?.khulaPools || []).filter((p) => !filterType || p.riceType?._id === filterType);
+  const khulaValue = visiblePools.reduce((sum, p) => sum + (p.costValue || 0), 0);
+  const khulaGrams = visiblePools.reduce((sum, p) => sum + p.remainingGrams, 0);
 
   return (
     <div className="flex flex-col gap-6">
@@ -63,6 +67,8 @@ const Reports = () => {
         <StatCard label="Credit sales" value={formatMoney(summary.creditSales)} accent="terracotta" />
         <StatCard label="Expenses" value={formatMoney(summary.totalExpense)} accent="coffee" />
       </div>
+
+      <WorthCard />
 
       <div className="grain-card p-4">
         <h3 className="section-title mb-3">Expenses by type</h3>
@@ -91,15 +97,25 @@ const Reports = () => {
             ))}
           </select>
         </div>
-        <div className="grid grid-cols-2 gap-3 mb-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
           <div className="bg-[var(--color-cream-deep)] rounded-lg p-3">
             <p className="text-xs text-[var(--color-coffee-soft)]">Bori in stock</p>
             <p className="font-display font-semibold">{visibleBags} bags</p>
           </div>
           <div className="bg-[var(--color-cream-deep)] rounded-lg p-3">
-            <p className="text-xs text-[var(--color-coffee-soft)]">Stock value</p>
+            <p className="text-xs text-[var(--color-coffee-soft)]">Bori value</p>
             <p className="font-display font-semibold">{formatMoney(visibleValue)}</p>
             <p className="text-xs text-[var(--color-coffee-soft)]">≈ {formatMoneyUrdu(visibleValue)}</p>
+          </div>
+          <div className="bg-[var(--color-cream-deep)] rounded-lg p-3">
+            <p className="text-xs text-[var(--color-coffee-soft)]">Khula value</p>
+            <p className="font-display font-semibold">{formatMoney(khulaValue)}</p>
+            <p className="text-xs text-[var(--color-coffee-soft)]">{formatGrams(khulaGrams)} at cost</p>
+          </div>
+          <div className="bg-[var(--color-cream-deep)] rounded-lg p-3">
+            <p className="text-xs text-[var(--color-coffee-soft)]">Bori + khula</p>
+            <p className="font-display font-semibold">{formatMoney(visibleValue + khulaValue)}</p>
+            <p className="text-xs text-[var(--color-coffee-soft)]">≈ {formatMoneyUrdu(visibleValue + khulaValue)}</p>
           </div>
         </div>
         <div className="overflow-x-auto">
@@ -133,11 +149,7 @@ const Reports = () => {
             <span className="text-sm text-[var(--ink-muted)]">{formatGrams(stockOverview.totalKhulaGrams)} in total</span>
           )}
         </div>
-        <KhulaContainers
-          compact
-          pools={(stockOverview?.khulaPools || []).filter((p) => !filterType || p.riceType?._id === filterType)}
-          emptyText="No khula open right now"
-        />
+        <KhulaContainers compact pools={visiblePools} emptyText="No khula open right now" />
       </div>
     </div>
   );

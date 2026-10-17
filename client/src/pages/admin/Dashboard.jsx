@@ -5,6 +5,7 @@ import api from "../../api/axios.js";
 import StatCard from "../../components/StatCard.jsx";
 import Loader from "../../components/Loader.jsx";
 import KhulaContainers from "../../components/KhulaContainers.jsx";
+import WorthCard from "../../components/WorthCard.jsx";
 import { formatMoney, formatMoneyUrdu, formatGrams } from "../../utils/format.js";
 import { axisTick, compactNumber, tooltipStyle } from "../../utils/chart.js";
 
@@ -78,6 +79,8 @@ const Dashboard = () => {
         <StatCard label="Expenses" value={formatMoney(summary.totalExpense)} sub={`Net cash ${formatMoney(summary.netCash)}`} accent="coffee" />
       </div>
 
+      <WorthCard />
+
       <div className="grid lg:grid-cols-3 gap-4">
         <div className="grain-card p-4 lg:col-span-2">
           <h3 className="section-title mb-3">Sales trend</h3>
@@ -124,14 +127,17 @@ const Dashboard = () => {
               Manage stock
             </Link>
           </div>
-          <div className="flex items-center justify-between bg-[var(--color-cream-deep)] rounded-lg px-3 py-2 mb-3 text-sm">
-            <span className="text-[var(--color-coffee-soft)]">Total stock value</span>
-            <span className="font-display font-semibold">
-              {formatMoney(stockOverview?.totalStockValue)}{" "}
-              <span className="text-xs font-normal text-[var(--color-coffee-soft)]">
-                (≈ {formatMoneyUrdu(stockOverview?.totalStockValue)})
-              </span>
-            </span>
+          <div className="grid grid-cols-2 gap-3 mb-3 text-sm">
+            <div className="bg-[var(--color-cream-deep)] rounded-lg px-3 py-2">
+              <p className="text-xs text-[var(--color-coffee-soft)]">Bori value</p>
+              <p className="font-semibold">{formatMoney(stockOverview?.totalStockValue)}</p>
+              <p className="text-xs text-[var(--color-coffee-soft)]">≈ {formatMoneyUrdu(stockOverview?.totalStockValue)}</p>
+            </div>
+            <div className="bg-[var(--color-cream-deep)] rounded-lg px-3 py-2">
+              <p className="text-xs text-[var(--color-coffee-soft)]">Khula value</p>
+              <p className="font-semibold">{formatMoney(stockOverview?.totalKhulaValue)}</p>
+              <p className="text-xs text-[var(--color-coffee-soft)]">{formatGrams(stockOverview?.totalKhulaGrams || 0)} at cost</p>
+            </div>
           </div>
           <div className="flex flex-col divide-y divide-[var(--color-husk)]">
             {stockOverview?.stock?.length ? (

@@ -42,7 +42,8 @@ business.
 - Edit or cancel a bill with a reason; the full history stays in the **Changes report**
 
 **Stock**
-- Main stock of bori per rice type and size, with purchase price and stock value
+- Main stock of bori per rice type and size, with purchase price and stock value; the value of the
+  khula (at cost) is shown next to it, plus bori + khula together
 - **Khula per rice type**: every opened bori of a type is added together, e.g. a 25 KG and a
   50 KG bori of Banaspati show as 75 KG. Sales take from the oldest lot first
 - Each bori is **weighed when opened**: khula gets the real weight (e.g. 24,700 g) and the
@@ -69,9 +70,14 @@ business.
 - Add a creditor without a bill, with their old balance from the paper khata (warns if the same
   name or phone is already in the khata)
 - **Expenses**: shop expenses, the owner's personal expenses and salaries
-- **Cash handling**: what is in the counter and the salesman's account, and every handover to the owner
-- **Paid to Asim**: every payment that reached the owner, one by one: each bank account, cash
-  handed over and transfers from the salesman's account, with a total for each and for all together
+- **Cash handling**: what is in the counter and the salesman's account, and every handover to the
+  owner: cash given in hand, cash deposited into one of the owner's bank accounts, or a transfer from
+  the salesman's account (with the account it went into)
+- **Total value**: what the shop has right now: stock at the shop (bori + khula), what all creditors
+  owe, and cash in store, added together. Hidden until you tap Show, like Cash in store
+- **Paid to Asim**: every payment that reached the owner, one by one: each bank account (bills,
+  khata payments, cash deposits and transfers into it) and cash given in hand, with a total for
+  each and for all together
 - **Commission** for commission salesmen, worked out on profit, with payouts tracked
 - **Profit** page made for the owner: one big profit (munafa) or loss (nuqsan) figure, a bar
   showing where the sales money went, then each step (rice cost, delivery, commission, expenses,

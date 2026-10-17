@@ -133,23 +133,57 @@ export const salesTrend = asyncHandler(async (req, res) => {
   res.json(results);
 });
 
-export const stockOverview = asyncHandler(async (req, res) => {
+// Bori stock (at last purchase price) and khula (at cost), per row and added up.
+const stockNumbers = async () => {
   const rows = await Stock.find().populate("riceType", "name active deleted").sort({ "riceType.name": 1 });
   const stock = visibleStock(rows);
-  const khula = await KhulaBatch.find({ status: "ACTIVE" }).populate("riceType", "name").sort({ createdAt: -1 });
   // Loose rice per rice type (all open bori, loose rice and returns of that type added together)
   const khulaPools = await buildKhulaPools();
-  const totalStockValue = stock.reduce((sum, s) => sum + s.quantity * (s.lastPricePerBori || 0), 0);
-  const totalBags = stock.reduce((sum, s) => sum + s.quantity, 0);
-  const totalKhulaGrams = khulaPools.reduce((sum, p) => sum + p.remainingGrams, 0);
-  const totalKhulaValue = khulaPools.reduce((sum, p) => sum + p.costValue, 0);
-  res.json({ stock, khula, khulaPools, totalStockValue, totalBags, totalKhulaGrams, totalKhulaValue });
+  return {
+    stock,
+    khulaPools,
+    totalStockValue: stock.reduce((sum, s) => sum + s.quantity * (s.lastPricePerBori || 0), 0),
+    totalBags: stock.reduce((sum, s) => sum + s.quantity, 0),
+    totalKhulaGrams: khulaPools.reduce((sum, p) => sum + p.remainingGrams, 0),
+    totalKhulaValue: khulaPools.reduce((sum, p) => sum + p.costValue, 0),
+  };
+};
+
+const khataNumbers = async () => {
+  const customers = await Customer.find({ balance: { $gt: 0 } }).sort({ balance: -1 });
+  return { customers, totalOutstanding: customers.reduce((sum, c) => sum + c.balance, 0) };
+};
+
+export const stockOverview = asyncHandler(async (req, res) => {
+  const [numbers, khula] = await Promise.all([
+    stockNumbers(),
+    KhulaBatch.find({ status: "ACTIVE" }).populate("riceType", "name").sort({ createdAt: -1 }),
+  ]);
+  res.json({ ...numbers, khula });
 });
 
 export const khataOverview = asyncHandler(async (req, res) => {
-  const customers = await Customer.find({ balance: { $gt: 0 } }).sort({ balance: -1 });
-  const totalOutstanding = customers.reduce((sum, c) => sum + c.balance, 0);
-  res.json({ customers, totalOutstanding });
+  res.json(await khataNumbers());
+});
+
+// What the shop has right now: stock at the shop (bori + khula), money creditors owe, and cash in
+// store (counter + salesman's account), added together.
+export const worth = asyncHandler(async (req, res) => {
+  const [stock, khata, pools] = await Promise.all([stockNumbers(), khataNumbers(), computeCashPools()]);
+  const stockValue = stock.totalStockValue + stock.totalKhulaValue;
+  res.json({
+    boriValue: stock.totalStockValue,
+    boriBags: stock.totalBags,
+    khulaValue: stock.totalKhulaValue,
+    khulaGrams: stock.totalKhulaGrams,
+    stockValue,
+    khataTotal: khata.totalOutstanding,
+    creditors: khata.customers.length,
+    cashInCounter: pools.cashInCounter,
+    cashInSalesmanAccount: pools.cashInSalesmanAccount,
+    cashInStore: pools.totalInStore,
+    total: stockValue + khata.totalOutstanding + pools.totalInStore,
+  });
 });
 
 // Cash physically expected in the store drawer + salesman's own bank account right now.
@@ -368,7 +402,8 @@ export const asimMoney = asyncHandler(async (req, res) => {
     });
   }
   groups.set("cash", { key: "cash", kind: "cash", label: "Cash", total: 0, count: 0, current: true });
-  groups.set("salesman-account", { key: "salesman-account", kind: "transfer", label: "Salesman's bank", total: 0, count: 0, current: true });
+  // Older transfers from the salesman's account that don't say which of Asim's accounts got them
+  groups.set("salesman-account", { key: "salesman-account", kind: "transfer", label: "Salesman's bank", total: 0, count: 0, current: false });
 
   const items = [];
   const add = (key, item) => {
@@ -402,11 +437,12 @@ export const asimMoney = asyncHandler(async (req, res) => {
     });
   }
   for (const h of handovers) {
-    add(h.source === "account" ? "salesman-account" : "cash", {
+    const into = h.toAccount && groups.has(String(h.toAccount)) ? String(h.toAccount) : "";
+    add(into || (h.source === "account" ? "salesman-account" : "cash"), {
       _id: h._id,
       date: h.createdAt,
       type: "handover",
-      title: h.source === "account" ? "Sent from salesman account" : "Cash handed over",
+      title: h.source === "account" ? "Sent from salesman account" : into ? "Cash deposited" : "Cash handed over",
       from: h.createdBy?.name || "",
       by: h.createdBy?.name || "",
       amount: h.amount,

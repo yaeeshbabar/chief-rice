@@ -258,14 +258,14 @@ const Stock = () => {
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard label="Bori in stock" value={`${totalBags} bags`} accent="wheat" />
+        <StatCard label="Bori value" value={formatMoney(totalValue)} sub={`≈ ${formatMoneyUrdu(totalValue)}, last purchase price`} accent="sage" />
+        <StatCard label="Khula value" value={formatMoney(khulaValue)} sub={`${formatGrams(khulaGrams)} at cost`} accent="wheat" />
         <StatCard
-          label="Bori stock value"
-          value={formatMoney(totalValue)}
-          sub={`≈ ${formatMoneyUrdu(totalValue)} · last purchase price`}
-          accent="sage"
+          label="Total stock value"
+          value={formatMoney(totalValue + khulaValue)}
+          sub={`≈ ${formatMoneyUrdu(totalValue + khulaValue)}, bori + khula`}
+          accent="coffee"
         />
-        <StatCard label="Khula (loose)" value={formatGrams(khulaGrams)} sub={`about ${formatMoney(khulaValue)} at cost`} accent="wheat" />
-        <StatCard label="Rice types" value={liveTypes.length} accent="coffee" />
       </div>
 
       <div className="grain-card p-3 flex flex-wrap items-center gap-3">

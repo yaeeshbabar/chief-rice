@@ -67,24 +67,6 @@ const CashInStoreCard = () => {
             </div>
           </div>
 
-          <div className="rounded-lg border border-[var(--color-wheat)] bg-[var(--surface-soft-brand)] p-3 flex flex-col gap-1.5">
-            <div className="flex justify-between text-sm">
-              <span className="font-semibold text-[var(--color-wheat-dark)]">Reserved for salesman commission</span>
-              <span className="font-display font-semibold text-[var(--color-wheat-dark)]">{formatMoney(data.commissionReserved)}</span>
-            </div>
-            {data.commissionByAgent?.map((a) => (
-              <div key={a.name} className="flex justify-between text-xs text-[var(--color-coffee-soft)]">
-                <span>{a.name}</span>
-                <span>{a.due < 0 ? `${formatMoney(Math.abs(a.due))} overpaid` : formatMoney(a.due)}</span>
-              </div>
-            ))}
-            <div className="flex justify-between text-sm pt-1.5 border-t border-[var(--color-husk)]">
-              <span className="font-semibold">Owner's cash (counter − reserved)</span>
-              <span className="font-display font-semibold">{formatMoney(data.freeCashInCounter)}</span>
-            </div>
-            <p className="text-[0.7rem] text-[var(--color-coffee-soft)]">Reserved money is for the salesmen above.</p>
-          </div>
-
           <div className="mt-1 flex flex-col divide-y divide-[var(--color-husk)] text-sm">
             <div className="flex justify-between py-1.5">
               <span className="text-[var(--color-coffee-soft)]">+ Cash sales</span>
@@ -110,10 +92,12 @@ const CashInStoreCard = () => {
               <span className="text-[var(--color-coffee-soft)]">− Cash returned (Wapsi)</span>
               <span>{formatMoney(data.breakdown.totalWapsiCash)}</span>
             </div>
-            <div className="flex justify-between py-1.5">
-              <span className="text-[var(--color-coffee-soft)]">− Commission handed to salesmen</span>
-              <span>{formatMoney(data.breakdown.totalCommissionPaid)}</span>
-            </div>
+            {data.breakdown.totalCommissionPaid > 0 && (
+              <div className="flex justify-between py-1.5">
+                <span className="text-[var(--color-coffee-soft)]">− Commission handed over</span>
+                <span>{formatMoney(data.breakdown.totalCommissionPaid)}</span>
+              </div>
+            )}
             <div className="flex justify-between py-1.5">
               <span className="text-[var(--color-coffee-soft)]">− Handed over from cash</span>
               <span>{formatMoney(data.breakdown.cashHandedOver)}</span>

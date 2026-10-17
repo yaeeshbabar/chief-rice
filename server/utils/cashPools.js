@@ -5,7 +5,6 @@ import Wapsi from "../models/Wapsi.js";
 import CashHandover from "../models/CashHandover.js";
 import BankAccount from "../models/BankAccount.js";
 import CommissionPayout from "../models/CommissionPayout.js";
-import { buildCommissionSummary } from "./commissionSummary.js";
 
 // Computes what should physically/actually be sitting in the two pools the
 // salesman can hand over from: the cash counter, and the salesman's own bank
@@ -13,7 +12,7 @@ import { buildCommissionSummary } from "./commissionSummary.js";
 // account never passes through either pool, so it's excluded here even though
 // it's still recorded for balances, payment history, and profit.
 export const computeCashPools = async () => {
-  const [sales, payments, expenses, wapsi, handovers, accounts, commissionPayouts, commission] = await Promise.all([
+  const [sales, payments, expenses, wapsi, handovers, accounts, commissionPayouts] = await Promise.all([
     Sale.find({ paymentType: "cash", cancelled: false }).select("total paymentMethod account"),
     Payment.find().select("amount paymentMethod account directToAsim"),
     Expense.find().select("amount"),
@@ -21,7 +20,6 @@ export const computeCashPools = async () => {
     CashHandover.find().select("amount source"),
     BankAccount.find().select("ownerType"),
     CommissionPayout.find().select("amount"),
-    buildCommissionSummary(),
   ]);
 
   const accountOwnerType = new Map(accounts.map((a) => [String(a._id), a.ownerType]));
@@ -52,10 +50,6 @@ export const computeCashPools = async () => {
     cashInCounter,
     cashInSalesmanAccount,
     totalInStore: cashInCounter + cashInSalesmanAccount,
-    // Part of the counter cash that belongs to commission salesmen, not to the owner.
-    commissionReserved: commission.totalReserved,
-    freeCashInCounter: cashInCounter - commission.totalReserved,
-    commissionByAgent: commission.agents.filter((a) => a.due !== 0).map((a) => ({ name: a.name, due: a.due })),
     breakdown: {
       totalCashSales: cashSales.reduce((sum, s) => sum + s.total, 0),
       totalCashPaymentsCollected: cashPayments.reduce((sum, p) => sum + p.amount, 0),

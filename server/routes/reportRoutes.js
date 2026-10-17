@@ -8,6 +8,7 @@ import {
   salesReport,
   profitReport,
   asimMoney,
+  worth,
 } from "../controllers/reportController.js";
 import { protect, requireRole } from "../middleware/auth.js";
 
@@ -21,5 +22,6 @@ router.get("/cash-in-store", cashInStore);
 router.get("/sales-report", salesReport);
 router.get("/profit-report", profitReport);
 router.get("/asim-money", requireRole("admin"), asimMoney);
+router.get("/worth", worth);
 
 export default router;
