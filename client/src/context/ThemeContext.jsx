@@ -15,6 +15,8 @@ export const ThemeProvider = ({ children }) => {
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
     localStorage.setItem(STORAGE_KEY, theme);
+    // The phone's status bar takes the colour of the app's top bar
+    document.querySelector('meta[name="theme-color"]')?.setAttribute("content", theme === "dark" ? "#111a2c" : "#ffffff");
   }, [theme]);
 
   const toggleTheme = useCallback(() => {

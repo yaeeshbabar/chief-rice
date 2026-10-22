@@ -98,6 +98,8 @@ business.
 - Find any bill by its invoice number
 - Clean, minimal interface with **light and dark** themes
 - Admin pages made for the phone: every amount shows in full, and long tables become simple lists
+- Add it to the phone's home screen like an app: a sharp icon, and a short logo animation when it
+  opens, in light or dark to match the chosen theme
 - All dates and daily bill numbers follow **Pakistan time**
 
 ## Screenshots

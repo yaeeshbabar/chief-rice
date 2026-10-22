@@ -2,14 +2,164 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#f7f9fc" media="(prefers-color-scheme: light)" />
-    <meta name="theme-color" content="#0b1220" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#ffffff" />
     <meta name="description" content="Chief Rice Trader: sales, stock and khata management for a rice wholesale and retail store." />
     <title>Chief Rice Trader</title>
+
+    <!-- Icons: browser tab, iPhone home screen, Android home screen (manifest) -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/png" sizes="48x48" href="/icons/favicon-48.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="application-name" content="Chief Rice" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Chief Rice" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+
+    <!-- Use the saved light/dark theme before anything is drawn, so the opening screen matches it -->
+    <script>
+      (function () {
+        var theme = "light";
+        try {
+          var saved = localStorage.getItem("crt_theme");
+          if (saved === "dark" || saved === "light") theme = saved;
+          else if (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) theme = "dark";
+        } catch (e) {}
+        document.documentElement.setAttribute("data-theme", theme);
+        var bar = document.querySelector('meta[name="theme-color"]');
+        if (bar) bar.setAttribute("content", theme === "dark" ? "#111a2c" : "#ffffff");
+        window.__splashAt = Date.now();
+        // Never leave the opening screen up if the app fails to start
+        setTimeout(function () {
+          var splash = document.getElementById("splash");
+          if (splash) splash.remove();
+        }, 15000);
+      })();
+    </script>
+
+    <!-- Opening screen: the logo settles in, a light sweeps across it, then it fades into the app -->
+    <style>
+      html { background: #f3f6fa; }
+      html[data-theme="dark"] { background: #0b1220; }
+      #splash {
+        --sp-ink: #14181f;
+        --sp-track: rgba(20, 24, 31, 0.1);
+        --sp-shadow: 0 20px 40px -16px rgba(0, 112, 192, 0.55);
+        position: fixed;
+        inset: 0;
+        z-index: 2147483000;
+        display: grid;
+        place-items: center;
+        background: radial-gradient(120% 75% at 50% 42%, #ffffff 0%, #f3f6fa 65%);
+        transition: opacity 0.3s ease, visibility 0.3s;
+      }
+      html[data-theme="dark"] #splash {
+        --sp-ink: #eef2f9;
+        --sp-track: rgba(238, 242, 249, 0.14);
+        --sp-shadow: 0 20px 56px -12px rgba(0, 152, 233, 0.6);
+        background: radial-gradient(120% 75% at 50% 42%, #15233d 0%, #0b1220 65%);
+      }
+      #splash .sp-stack { display: flex; flex-direction: column; align-items: center; }
+      #splash .sp-tile {
+        position: relative;
+        width: 88px;
+        height: 88px;
+        border-radius: 20px;
+        overflow: hidden;
+        box-shadow: var(--sp-shadow);
+        animation: sp-pop 0.45s cubic-bezier(0.2, 0.9, 0.25, 1.15) both;
+      }
+      #splash .sp-tile svg { display: block; width: 100%; height: 100%; }
+      #splash .sp-tile::after {
+        content: "";
+        position: absolute;
+        inset: -25%;
+        background: linear-gradient(105deg, transparent 38%, rgba(255, 255, 255, 0.5) 50%, transparent 62%);
+        transform: translateX(-120%);
+        animation: sp-sheen 0.6s 0.45s ease-in-out both;
+      }
+      #splash .sp-grain {
+        transform-box: fill-box;
+        transform-origin: 50% 50%;
+        animation: sp-drop 0.38s cubic-bezier(0.2, 0.9, 0.3, 1.25) both;
+      }
+      #splash .sp-g1 { animation-delay: 0.12s; }
+      #splash .sp-g2 { animation-delay: 0.2s; }
+      #splash .sp-g3 { animation-delay: 0.28s; }
+      #splash .sp-name {
+        margin: 20px 0 0;
+        font: 600 17px/1.2 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        letter-spacing: -0.01em;
+        color: var(--sp-ink);
+        animation: sp-rise 0.4s 0.3s ease-out both;
+      }
+      #splash .sp-bar {
+        width: 44px;
+        height: 3px;
+        margin-top: 16px;
+        border-radius: 3px;
+        background: var(--sp-track);
+        overflow: hidden;
+        opacity: 0;
+        animation: sp-show 0.3s 1.4s ease both;
+      }
+      #splash .sp-bar span {
+        display: block;
+        width: 40%;
+        height: 100%;
+        border-radius: 3px;
+        background: #0098e9;
+        animation: sp-load 1s 1.4s ease-in-out infinite;
+      }
+      #splash.is-leaving { opacity: 0; visibility: hidden; pointer-events: none; }
+      #splash.is-leaving .sp-tile { animation: none; transform: scale(1.06); transition: transform 0.3s ease; }
+      @keyframes sp-pop { from { opacity: 0; transform: scale(0.82); } to { opacity: 1; transform: scale(1); } }
+      @keyframes sp-drop { from { opacity: 0; transform: translateY(-4px) scale(0.6); } to { opacity: 1; transform: none; } }
+      @keyframes sp-sheen { from { transform: translateX(-120%); } to { transform: translateX(120%); } }
+      @keyframes sp-rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+      @keyframes sp-show { to { opacity: 1; } }
+      @keyframes sp-load { from { transform: translateX(-110%); } to { transform: translateX(260%); } }
+      @media (prefers-reduced-motion: reduce) {
+        #splash *, #splash .sp-tile::after { animation: none !important; }
+        #splash .sp-tile::after { display: none; }
+        #splash .sp-bar { opacity: 1; }
+      }
+    </style>
+    <noscript><style>#splash { display: none; }</style></noscript>
   </head>
   <body>
+    <div id="splash" aria-hidden="true">
+      <div class="sp-stack">
+        <div class="sp-tile">
+          <svg viewBox="0 0 32 32">
+            <defs>
+              <linearGradient id="sp-fill" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0" stop-color="#2bb4f6" />
+                <stop offset="1" stop-color="#0083cf" />
+              </linearGradient>
+              <radialGradient id="sp-light" cx="0.3" cy="0.2" r="0.9">
+                <stop offset="0" stop-color="#fff" stop-opacity="0.22" />
+                <stop offset="0.6" stop-color="#fff" stop-opacity="0" />
+              </radialGradient>
+              <filter id="sp-lift" x="-30%" y="-30%" width="160%" height="160%">
+                <feDropShadow dx="0" dy="0.45" stdDeviation="0.55" flood-color="#003a66" flood-opacity="0.28" />
+              </filter>
+            </defs>
+            <rect width="32" height="32" fill="url(#sp-fill)" />
+            <rect width="32" height="32" fill="url(#sp-light)" />
+            <g fill="#fff" filter="url(#sp-lift)">
+              <g class="sp-grain sp-g1"><ellipse cx="12.4" cy="13.2" rx="2.5" ry="6.4" transform="rotate(40 12.4 13.2)" /></g>
+              <g class="sp-grain sp-g2"><ellipse cx="19.8" cy="13.4" rx="2.5" ry="6.4" transform="rotate(22 19.8 13.4)" /></g>
+              <g class="sp-grain sp-g3"><ellipse cx="15.6" cy="21.4" rx="2.5" ry="6.4" transform="rotate(58 15.6 21.4)" /></g>
+            </g>
+          </svg>
+        </div>
+        <p class="sp-name">Chief Rice Trader</p>
+        <div class="sp-bar"><span></span></div>
+      </div>
+    </div>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
