@@ -169,6 +169,8 @@ const ProfitReport = () => {
   if (data.shopExpensesTotal + data.salaryTotal > data.salesProfit && data.invoiceCount > 0)
     signals.push({ tone: "bad", text: "Expenses more than sales profit" });
   if (data.returnsNetLoss > 0) signals.push({ tone: "warn", text: `Returns cost ${formatMoney(data.returnsNetLoss)}` });
+  if (data.totalDiscount > 0) signals.push({ tone: "warn", text: `Discounts given ${formatMoney(data.totalDiscount)}` });
+  if (data.totalExtra > 0) signals.push({ tone: "good", text: `Extra received ${formatMoney(data.totalExtra)}` });
 
   const maxRice = Math.max(1, ...data.profitByRice.map((r) => Math.abs(r.grossProfit)));
   const commission = Object.entries(data.commissionByAgent || {});
@@ -225,7 +227,7 @@ const ProfitReport = () => {
 
         {signals.length > 0 && (
           <div className="mt-4 flex flex-wrap gap-2">
-            {signals.slice(0, 3).map((s) => (
+            {signals.slice(0, 4).map((s) => (
               <span key={s.text} className={`signal is-${s.tone}`}>
                 {s.text}
               </span>

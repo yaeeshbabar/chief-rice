@@ -22,6 +22,8 @@ const NewSale = () => {
   const [submitting, setSubmitting] = useState(false);
   const [successInvoice, setSuccessInvoice] = useState(null);
   const [showCost, setShowCost] = useState(false);
+  // A big discount/extra needs a second press of Complete sale (catches a missing or extra zero)
+  const [bigChecked, setBigChecked] = useState("");
 
   // khula form
   const [khulaRiceType, setKhulaRiceType] = useState("");
@@ -108,7 +110,9 @@ const NewSale = () => {
     }
     const riceType = riceTypes.find((r) => r._id === khulaRiceType);
     const total = (Number(khulaGrams) / 1000) * Number(khulaPrice);
+    // A new item changes the bill, so any amount received typed before is cleared
     updateActiveBill((b) => ({
+      amountReceived: "",
       cart: [
         ...b.cart,
         {
@@ -138,6 +142,7 @@ const NewSale = () => {
     const riceType = riceTypes.find((r) => r._id === boriRiceType);
     const total = Number(boriQty) * Number(boriPrice);
     updateActiveBill((b) => ({
+      amountReceived: "",
       cart: [
         ...b.cart,
         {
@@ -155,10 +160,16 @@ const NewSale = () => {
     setBoriPrice("");
   };
 
-  const removeFromCart = (idx) => updateActiveBill((b) => ({ cart: b.cart.filter((_, i) => i !== idx) }));
+  const removeFromCart = (idx) => updateActiveBill((b) => ({ amountReceived: "", cart: b.cart.filter((_, i) => i !== idx) }));
 
   const subtotal = cart.reduce((sum, i) => sum + i.total, 0);
   const total = subtotal; // Ride is never charged to the customer - it's a separate store expense below.
+  // Cash and online bills: what the customer actually paid. Less is a discount, more is extra.
+  const isCashBill = activeBill.paymentType === "cash";
+  const receivedTyped = isCashBill && activeBill.amountReceived !== undefined && activeBill.amountReceived !== "";
+  const received = receivedTyped ? Number(activeBill.amountReceived) : total;
+  const adjustment = isCashBill && Number.isFinite(received) ? Math.round((received - total) * 100) / 100 : 0;
+  const bigDifference = receivedTyped && total > 0 && Math.abs(adjustment) > total * 0.1;
 
   const submitSale = async () => {
     setError("");
@@ -172,6 +183,22 @@ const NewSale = () => {
     }
     if (activeBill.paymentType === "cash" && activeBill.paymentMethod === "online" && !activeBill.accountId) {
       setError("Select which account the payment was received into");
+      return;
+    }
+    if (receivedTyped && (!Number.isFinite(received) || received <= 0)) {
+      setError("Enter the amount received");
+      return;
+    }
+    if (receivedTyped && received > total * 2) {
+      setError(`Amount received (${formatMoney(received)}) is much more than the bill (${formatMoney(total)}). Check it.`);
+      return;
+    }
+    const bigKey = `${activeBill.id}:${total}:${received}`;
+    if (bigDifference && bigChecked !== bigKey) {
+      setBigChecked(bigKey);
+      setError(
+        `Amount received is ${formatMoney(Math.abs(adjustment))} ${adjustment < 0 ? "less" : "more"} than the bill. If that is right, press Complete sale again.`
+      );
       return;
     }
     setSubmitting(true);
@@ -195,6 +222,7 @@ const NewSale = () => {
       } else {
         payload.paymentMethod = activeBill.paymentMethod || "cash";
         if (payload.paymentMethod === "online") payload.accountId = activeBill.accountId;
+        if (receivedTyped) payload.amountReceived = received;
       }
       const { data } = await api.post("/sales", payload);
       setSuccessInvoice(data);
@@ -552,14 +580,53 @@ const NewSale = () => {
                 />
               )}
 
+              {isCashBill && cart.length > 0 && (
+                <div>
+                  <label className="field-label" htmlFor="amount-received">
+                    Amount received (Rs)
+                  </label>
+                  <input
+                    id="amount-received"
+                    type="number"
+                    min="0"
+                    inputMode="decimal"
+                    className="field-input"
+                    value={activeBill.amountReceived ?? ""}
+                    placeholder={String(Math.round(total * 100) / 100)}
+                    onChange={(e) => updateActiveBill({ amountReceived: e.target.value })}
+                  />
+                  <p
+                    className={`text-xs mt-1.5 ${
+                      bigDifference ? "text-[var(--neg-ink)]" : adjustment < 0 ? "text-[var(--warn-ink)]" : adjustment > 0 ? "text-[var(--pos-ink)]" : "text-[var(--ink-muted)]"
+                    }`}
+                  >
+                    {adjustment < 0
+                      ? `${formatMoney(-adjustment)} discount`
+                      : adjustment > 0
+                        ? `${formatMoney(adjustment)} extra`
+                        : "Same as the bill"}
+                    {bigDifference ? ". Check the amount." : ""}
+                  </p>
+                </div>
+              )}
+
               <div className="border-t border-[var(--color-husk)] pt-3 flex flex-col gap-1">
                 <div className="flex justify-between text-sm text-[var(--color-coffee-soft)]">
                   <span>Subtotal</span>
                   <span>{formatMoney(subtotal)}</span>
                 </div>
+                {adjustment !== 0 && (
+                  <div className="flex justify-between text-sm text-[var(--color-coffee-soft)]">
+                    <span>{adjustment < 0 ? "Discount" : "Extra"}</span>
+                    <span>
+                      {adjustment < 0 ? "− " : "+ "}
+                      {formatMoney(Math.abs(adjustment))}
+                    </span>
+                  </div>
+                )}
                 <div className="flex justify-between font-display text-lg font-semibold">
                   <span>Total (customer pays)</span>
-                  <span>{formatMoney(total)}</span>
+                  <span>{formatMoney(isCashBill && Number.isFinite(received) ? received : total)}</span>
                 </div>
               </div>
 

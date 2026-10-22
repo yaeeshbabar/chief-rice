@@ -4,9 +4,12 @@ import { Plus } from "lucide-react";
 import api from "../../api/axios.js";
 import Loader from "../../components/Loader.jsx";
 import AddCreditorModal from "../../components/AddCreditorModal.jsx";
+import { PhoneList, PhoneRow } from "../../components/PhoneList.jsx";
+import { useIsPhone } from "../../utils/useIsPhone.js";
 import { formatMoney } from "../../utils/format.js";
 
 const Khata = () => {
+  const isPhone = useIsPhone();
   const [customers, setCustomers] = useState([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
@@ -38,10 +41,10 @@ const Khata = () => {
           <h2 className="page-title">Khata</h2>
           <p className="text-sm text-[var(--color-coffee-soft)]">Total outstanding: {formatMoney(total)}</p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <form onSubmit={handleSearch} className="flex gap-2">
+        <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+          <form onSubmit={handleSearch} className="flex gap-2 flex-1 sm:flex-none">
             <input
-              className="field-input w-56"
+              className="field-input w-full sm:w-56"
               placeholder="Search by name, shop or phone"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -62,6 +65,24 @@ const Khata = () => {
 
       {loading ? (
         <Loader />
+      ) : isPhone ? (
+        <div className="grain-card">
+          <PhoneList empty="No customers found">
+            {visible.map((c) => (
+              <PhoneRow
+                key={c._id}
+                title={
+                  <Link to={`/admin/khata/${c._id}`} className="font-medium text-[var(--ink)]">
+                    {c.name}
+                  </Link>
+                }
+                sub={[c.shopName, c.phone].filter(Boolean).join(", ") || undefined}
+                amount={formatMoney(c.balance)}
+                amountClass={c.balance > 0 ? "text-[var(--neg-ink)]" : "text-[var(--pos-ink)]"}
+              />
+            ))}
+          </PhoneList>
+        </div>
       ) : (
         <div className="grain-card overflow-x-auto">
           <table className="w-full text-sm min-w-[560px]">

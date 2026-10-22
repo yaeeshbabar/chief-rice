@@ -4,11 +4,14 @@ import api from "../api/axios.js";
 import Modal from "./Modal.jsx";
 import ReasonModal from "./ReasonModal.jsx";
 import Loader from "./Loader.jsx";
+import { PhoneList, PhoneRow } from "./PhoneList.jsx";
+import { useIsPhone } from "../utils/useIsPhone.js";
 import { formatMoney, formatDateTime } from "../utils/format.js";
 
 // Commission owed to each salesman, collected in one place. Cash is handed over from here
 // when needed, and every handover is kept as a record.
 const CommissionPanel = () => {
+  const isPhone = useIsPhone();
   const [summary, setSummary] = useState(null);
   const [payouts, setPayouts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -71,7 +74,7 @@ const CommissionPanel = () => {
         </div>
         {summary && (
           <div className="text-right">
-            <p className="text-xs text-[var(--color-coffee-soft)]">Reserved for commission</p>
+            <p className="text-xs text-[var(--color-coffee-soft)]">Still owed</p>
             <p className="font-display text-lg font-semibold text-[var(--color-wheat-dark)]">{formatMoney(summary.totalReserved)}</p>
           </div>
         )}
@@ -83,6 +86,23 @@ const CommissionPanel = () => {
         <p className="text-sm text-center text-[var(--color-terracotta-deep)]">{loadError}</p>
       ) : (
         <>
+          {isPhone ? (
+            <PhoneList className="-mx-4 border-y border-[var(--line)]" empty="No commission salesmen yet. Add them in Settings.">
+              {summary.agents.map((a) => (
+                <PhoneRow
+                  key={a.agentId}
+                  title={`${a.name} (${a.percentage}%)`}
+                  sub={`Earned ${formatMoney(a.earned)}, handed over ${formatMoney(a.paid)}`}
+                  amount={a.due < 0 ? `${formatMoney(Math.abs(a.due))} overpaid` : `${formatMoney(a.due)} owed`}
+                  amountSub={
+                    <button className="btn-outline text-xs px-3 py-1 mt-1" disabled={a.due <= 0} onClick={() => openPay(a)}>
+                      Hand over
+                    </button>
+                  }
+                />
+              ))}
+            </PhoneList>
+          ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm min-w-[520px]">
               <thead>
@@ -133,6 +153,7 @@ const CommissionPanel = () => {
               )}
             </table>
           </div>
+          )}
 
           <div>
             <div className="flex items-center justify-between mb-2">

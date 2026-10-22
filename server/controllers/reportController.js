@@ -13,6 +13,7 @@ import { asyncHandler } from "../middleware/errorHandler.js";
 import { accountText } from "../utils/changeLog.js";
 import { visibleStock } from "./stockController.js";
 import { buildKhulaPools } from "../utils/khulaPools.js";
+import { wapsiItems, wapsiCashOut, wapsiRefund } from "../utils/wapsiItems.js";
 
 const startOfRange = (range, refDate = new Date()) => {
   const d = new Date(refDate);
@@ -43,9 +44,15 @@ export const summary = asyncHandler(async (req, res) => {
   const sales = await Sale.find({ createdAt: { $gte: from, $lte: to }, cancelled: false });
   const expenses = await Expense.find({ createdAt: { $gte: from, $lte: to } });
   const wapsi = await Wapsi.find({ createdAt: { $gte: from, $lte: to } });
+  const payments = await Payment.find({ createdAt: { $gte: from, $lte: to } }).select("amount");
 
   const cashSales = sales.filter((s) => s.paymentType === "cash").reduce((sum, s) => sum + s.total, 0);
   const creditSales = sales.filter((s) => s.paymentType === "credit").reduce((sum, s) => sum + s.total, 0);
+  // Profit of each kind of bill: sale − rice cost − commission − delivery (stored on every bill)
+  const cashProfit = sales.filter((s) => s.paymentType === "cash").reduce((sum, s) => sum + (s.profit || 0), 0);
+  const creditProfit = sales.filter((s) => s.paymentType === "credit").reduce((sum, s) => sum + (s.profit || 0), 0);
+  // Money recovered from creditors (khata payments, cash and online)
+  const recovery = payments.reduce((sum, p) => sum + p.amount, 0);
   const totalSales = cashSales + creditSales;
   const rideCharges = sales.reduce((sum, s) => sum + (s.rideCharge || 0), 0);
 
@@ -64,7 +71,7 @@ export const summary = asyncHandler(async (req, res) => {
     (sum, s) => sum + s.items.filter((i) => i.itemType === "bori").reduce((a, i) => a + i.quantityBori, 0),
     0
   );
-  const wapsiCash = wapsi.reduce((sum, w) => sum + (w.cashReturned || 0), 0);
+  const wapsiCash = wapsi.reduce((sum, w) => sum + wapsiCashOut(w), 0);
 
   res.json({
     range,
@@ -74,6 +81,10 @@ export const summary = asyncHandler(async (req, res) => {
     cashSales,
     creditSales,
     totalSales,
+    cashProfit,
+    creditProfit,
+    recovery,
+    recoveryCount: payments.length,
     rideCharges,
     totalExpense,
     expenseByCategory,
@@ -253,6 +264,9 @@ export const profitReport = asyncHandler(async (req, res) => {
   ]);
 
   const totalRevenue = sales.reduce((sum, s) => sum + s.total, 0);
+  // Cash/online bills paid a little less (discount) or more (extra) than the bill price
+  const totalDiscount = sales.reduce((sum, s) => sum + Math.max(0, (s.subtotal || 0) - (s.total || 0)), 0);
+  const totalExtra = sales.reduce((sum, s) => sum + Math.max(0, (s.total || 0) - (s.subtotal || 0)), 0);
   const totalCostOfGoods = sales.reduce((sum, s) => sum + (s.costOfGoods || 0), 0);
   const totalRideCost = sales.reduce((sum, s) => sum + (s.rideCost || 0), 0);
   const totalCommission = sales.reduce((sum, s) => sum + (s.commissionAmount || 0), 0);
@@ -302,13 +316,16 @@ export const profitReport = asyncHandler(async (req, res) => {
   let returnsRefund = 0;
   let returnsCostRecovered = 0;
   for (const w of wapsi) {
-    returnsRefund += w.cashReturned || 0;
-    if (w.itemType === "bori") {
-      returnsCostRecovered += (w.quantityBori || 0) * priceFor(w.riceType, w.boriSize);
-    } else {
-      const size = priceFor(w.riceType, 25) > 0 ? 25 : 50;
-      const perKg = priceFor(w.riceType, size) / size;
-      returnsCostRecovered += ((w.quantityGrams || 0) / 1000) * perKg;
+    // Money given back, in cash or off a khata
+    returnsRefund += wapsiRefund(w);
+    for (const i of wapsiItems(w)) {
+      if (i.itemType === "bori") {
+        returnsCostRecovered += (i.quantityBori || 0) * priceFor(i.riceType, i.boriSize);
+      } else {
+        const size = priceFor(i.riceType, 25) > 0 ? 25 : 50;
+        const perKg = priceFor(i.riceType, size) / size;
+        returnsCostRecovered += ((i.quantityGrams || 0) / 1000) * perKg;
+      }
     }
   }
   const returnsNetLoss = returnsRefund - returnsCostRecovered;
@@ -340,6 +357,8 @@ export const profitReport = asyncHandler(async (req, res) => {
   res.json({
     invoiceCount: sales.length,
     totalRevenue,
+    totalDiscount,
+    totalExtra,
     totalCostOfGoods,
     grossProfit,
     grossMarginPercent: totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0,

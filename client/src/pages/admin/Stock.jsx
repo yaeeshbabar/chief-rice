@@ -8,6 +8,8 @@ import StatCard from "../../components/StatCard.jsx";
 import KhulaContainers from "../../components/KhulaContainers.jsx";
 import OpenBoriModal from "../../components/OpenBoriModal.jsx";
 import { RenameRiceTypeModal, DeleteRiceTypeModal } from "../../components/RiceTypeFixModals.jsx";
+import { PhoneList, PhoneRow } from "../../components/PhoneList.jsx";
+import { useIsPhone } from "../../utils/useIsPhone.js";
 import { formatMoney, formatMoneyUrdu, formatDateTime, formatGrams } from "../../utils/format.js";
 
 // Stock movement types read as plain words, with a dot colour per kind of movement
@@ -52,6 +54,7 @@ const SizePicker = ({ value, onChange }) => (
 );
 
 const Stock = () => {
+  const isPhone = useIsPhone();
   const [riceTypes, setRiceTypes] = useState([]);
   const [stock, setStock] = useState([]);
   const [pools, setPools] = useState([]);
@@ -385,6 +388,63 @@ const Stock = () => {
       <div className="grain-card p-4">
         <h3 className="section-title mb-1">Stock movement log</h3>
         <p className="text-xs text-[var(--ink-muted)] mb-3">Fix or delete a wrong entry here.</p>
+        {isPhone ? (
+          <PhoneList className="-mx-4 border-t border-[var(--line)]" empty="No stock movement yet">
+            {visibleTransactions.slice(0, logLimit).map((t) => {
+              const canEdit = t.type === "STOCK_IN" && !t.deleted;
+              const qty =
+                t.type === "ADJUSTMENT" && t.quantityBefore !== undefined && t.quantityAfter !== undefined
+                  ? `${t.quantityBefore} → ${t.quantityAfter}`
+                  : `${t.quantity} bori`;
+              return (
+                <PhoneRow
+                  key={t._id}
+                  muted={t.deleted}
+                  title={
+                    <>
+                      <span className={t.deleted ? "line-through" : ""}>
+                        {t.riceType?.name} {t.boriSize} KG
+                      </span>{" "}
+                      <span className={`badge ${movementBadge[t.type] || "badge-finished"}`}>{movementLabel(t.type)}</span>
+                      {t.deleted && <span className="badge badge-credit ml-1">Deleted</span>}
+                      {t.edited && !t.deleted && (
+                        <button className="badge badge-account ml-1" onClick={() => setHistoryEntry(t)}>
+                          Edited
+                        </button>
+                      )}
+                    </>
+                  }
+                  sub={[
+                    t.type === "STOCK_IN" && t.pricePerBori ? `${formatMoney(t.pricePerBori)} per bori` : "",
+                    t.note,
+                    t.deleted ? `Deleted${t.deletedBy?.name ? ` by ${t.deletedBy.name}` : ""}: ${t.deleteReason || ""}` : "",
+                  ]
+                    .filter(Boolean)
+                    .join(", ") || undefined}
+                  meta={`${formatDateTime(t.createdAt)}, ${t.createdBy?.name || ""}`}
+                  amount={qty}
+                  actions={
+                    canEdit ? (
+                      <>
+                        <button className="icon-btn h-8 w-8" onClick={() => openEditEntry(t)} title="Correct this entry" aria-label="Correct this entry">
+                          <Pencil size={15} />
+                        </button>
+                        <button
+                          className="icon-btn h-8 w-8 hover:text-[var(--neg-ink)]"
+                          onClick={() => setDeleteEntry(t)}
+                          title="Delete this entry"
+                          aria-label="Delete this entry"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </>
+                    ) : undefined
+                  }
+                />
+              );
+            })}
+          </PhoneList>
+        ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm min-w-[860px]">
             <thead>
@@ -473,6 +533,7 @@ const Stock = () => {
             </tbody>
           </table>
         </div>
+        )}
         {visibleTransactions.length > logLimit && (
           <div className="pt-3 text-center">
             <button className="btn-outline text-xs py-1.5" onClick={() => setLogLimit((n) => n + 100)}>

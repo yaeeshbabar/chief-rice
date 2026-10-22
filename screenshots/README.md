@@ -9,9 +9,9 @@ then push. The main README picks it up automatically.
 | --- | --- |
 | `dashboard.png` | Admin dashboard (light) |
 | `dashboard-dark.png` | Admin dashboard (dark mode) |
-| `new-sale.png` | Salesman, New sale |
+| `new-sale.png` | Salesman, New sale (with amount received) |
 | `invoices.png` | Admin, Invoices list |
-| `invoice.png` | One invoice |
+| `invoice.png` | One invoice (paid a little less, so it shows a discount) |
 | `profit-report.png` | Profit (munafa / nuqsan) |
 | `asim-money.png` | Paid to Asim: money per bank account, cash and transfers |
 | `stock.png` | Admin, Stock |

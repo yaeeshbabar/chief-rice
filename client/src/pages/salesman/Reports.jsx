@@ -6,6 +6,13 @@ import KhulaContainers from "../../components/KhulaContainers.jsx";
 import WorthCard from "../../components/WorthCard.jsx";
 import { formatMoney, formatMoneyUrdu, formatGrams } from "../../utils/format.js";
 
+// Profit of these bills: sale − rice cost − commission − delivery
+const ProfitLine = ({ value = 0 }) => (
+  <span className={`font-medium ${value < 0 ? "text-[var(--neg-ink)]" : "text-[var(--pos-ink)]"}`}>
+    {value < 0 ? "Loss" : "Profit"} {formatMoney(Math.abs(value))}
+  </span>
+);
+
 const ranges = [
   { key: "daily", label: "Today" },
   { key: "weekly", label: "This week" },
@@ -61,10 +68,18 @@ const Reports = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="Total sales" value={formatMoney(summary.totalSales)} sub={`${summary.invoiceCount} invoices`} accent="wheat" />
-        <StatCard label="Cash sales" value={formatMoney(summary.cashSales)} accent="sage" />
-        <StatCard label="Credit sales" value={formatMoney(summary.creditSales)} accent="terracotta" />
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+        <div className="col-span-2 lg:col-span-1 grid">
+          <StatCard label="Total sales" value={formatMoney(summary.totalSales)} sub={`${summary.invoiceCount} invoices`} accent="wheat" />
+        </div>
+        <StatCard label="Cash sales" value={formatMoney(summary.cashSales)} sub={<ProfitLine value={summary.cashProfit} />} accent="sage" />
+        <StatCard label="Credit sales" value={formatMoney(summary.creditSales)} sub={<ProfitLine value={summary.creditProfit} />} accent="terracotta" />
+        <StatCard
+          label="Recovered from creditors"
+          value={formatMoney(summary.recovery)}
+          sub={`${summary.recoveryCount} ${summary.recoveryCount === 1 ? "payment" : "payments"}`}
+          accent="sage"
+        />
         <StatCard label="Expenses" value={formatMoney(summary.totalExpense)} accent="coffee" />
       </div>
 

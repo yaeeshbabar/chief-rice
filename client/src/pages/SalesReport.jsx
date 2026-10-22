@@ -3,7 +3,9 @@ import { Link } from "react-router-dom";
 import api from "../api/axios.js";
 import Loader from "../components/Loader.jsx";
 import StatCard from "../components/StatCard.jsx";
-import { formatMoney, formatDateTime, paymentLabel, paymentBadgeClass, monthBounds } from "../utils/format.js";
+import { PhoneList, PhoneRow } from "../components/PhoneList.jsx";
+import { useIsPhone } from "../utils/useIsPhone.js";
+import { formatMoney, formatDateTime, paymentLabel, paymentBadgeClass, monthBounds, adjustmentText } from "../utils/format.js";
 
 const quickRanges = [
   { key: "today", label: "Today" },
@@ -20,6 +22,7 @@ const SalesReport = ({ role }) => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const isPhone = useIsPhone();
 
   const load = () => {
     setLoading(true);
@@ -111,8 +114,12 @@ const SalesReport = ({ role }) => {
         <p className="grain-card p-6 text-center text-sm text-[var(--color-terracotta-deep)]">{error}</p>
       ) : (
         <>
-          <div className="grid grid-cols-3 gap-4">
-            <button onClick={() => setPaymentType("")} aria-pressed={paymentType === ""} className={`stat-pick ${paymentType === "" ? "is-on" : ""}`}>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
+            <button
+              onClick={() => setPaymentType("")}
+              aria-pressed={paymentType === ""}
+              className={`stat-pick col-span-2 sm:col-span-1 ${paymentType === "" ? "is-on" : ""}`}
+            >
               <StatCard label="All bills" value={formatMoney(data.totals.combinedTotal)} sub={`${data.totals.combinedCount} bills`} accent="wheat" />
             </button>
             <button onClick={() => setPaymentType("cash")} aria-pressed={paymentType === "cash"} className={`stat-pick ${paymentType === "cash" ? "is-on" : ""}`}>
@@ -123,6 +130,29 @@ const SalesReport = ({ role }) => {
             </button>
           </div>
 
+          {isPhone ? (
+            <div className="grain-card">
+              <PhoneList empty="No bills in this range">
+                {data.sales.map((s) => (
+                  <PhoneRow
+                    key={s._id}
+                    title={
+                      <>
+                        <Link to={`${invoiceBase}/${s._id}`} className="font-semibold text-[var(--accent-ink)]">
+                          #{s.invoiceNumber}
+                        </Link>{" "}
+                        {s.customer?.name || "Walk-in"}
+                      </>
+                    }
+                    sub={`${paymentLabel(s)}, ${s.createdBy?.name || ""}`}
+                    meta={`${formatDateTime(s.createdAt)}, bill ${s.dailyBillNumber}`}
+                    amount={formatMoney(s.total)}
+                    amountSub={adjustmentText(s)}
+                  />
+                ))}
+              </PhoneList>
+            </div>
+          ) : (
           <div className="grain-card overflow-x-auto">
             <table className="w-full text-sm min-w-[680px]">
               <thead>
@@ -151,7 +181,10 @@ const SalesReport = ({ role }) => {
                       <span className={`badge ${paymentBadgeClass(s)}`}>{paymentLabel(s)}</span>
                     </td>
                     <td className="py-2.5 px-4">{s.createdBy?.name}</td>
-                    <td className="py-2.5 px-4 text-right font-semibold">{formatMoney(s.total)}</td>
+                    <td className="py-2.5 px-4 text-right">
+                      <span className="font-semibold">{formatMoney(s.total)}</span>
+                      {adjustmentText(s) && <span className="block text-xs text-[var(--ink-muted)]">{adjustmentText(s)}</span>}
+                    </td>
                   </tr>
                 ))}
                 {!data.sales.length && (
@@ -164,6 +197,7 @@ const SalesReport = ({ role }) => {
               </tbody>
             </table>
           </div>
+          )}
         </>
       )}
     </div>

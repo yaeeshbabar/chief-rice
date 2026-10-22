@@ -5,6 +5,8 @@ import api from "../api/axios.js";
 import Loader from "../components/Loader.jsx";
 import StatCard from "../components/StatCard.jsx";
 import { EditPaymentModal, DeletePaymentModal } from "../components/PaymentFixModals.jsx";
+import { PhoneList, PhoneRow } from "../components/PhoneList.jsx";
+import { useIsPhone } from "../utils/useIsPhone.js";
 import { formatMoney, formatDateTime, monthBounds, accountLabel } from "../utils/format.js";
 
 const quickRanges = [
@@ -14,6 +16,7 @@ const quickRanges = [
 ];
 
 const Payments = ({ role }) => {
+  const isPhone = useIsPhone();
   const [quick, setQuick] = useState("today");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
@@ -100,6 +103,50 @@ const Payments = ({ role }) => {
             <StatCard label="Creditors who paid" value={new Set(data.payments.map((p) => p.customer?._id)).size} accent="wheat" />
           </div>
 
+          {isPhone ? (
+            <div className="grain-card">
+              <PhoneList empty="No payments in this range">
+                {data.payments.map((p) => (
+                  <PhoneRow
+                    key={p._id}
+                    title={
+                      p.customer ? (
+                        <Link to={`${customerBase}/${p.customer._id}`} className="font-semibold text-[var(--accent-ink)]">
+                          {p.customer.name}
+                        </Link>
+                      ) : (
+                        "—"
+                      )
+                    }
+                    sub={
+                      <>
+                        {p.paymentMethod === "online" ? accountLabel(p.account) : "Cash"}
+                        {p.directToAsim && <span className="badge badge-over ml-1.5">Direct to Asim</span>}
+                        {p.edited && <span className="badge badge-account ml-1.5">Edited</span>}
+                      </>
+                    }
+                    meta={`${formatDateTime(p.createdAt)}, ${p.createdBy?.name || ""}`}
+                    amount={formatMoney(p.amount)}
+                    actions={
+                      <>
+                        <button className="icon-btn h-8 w-8" onClick={() => setEditTarget(p)} title="Correct this payment" aria-label="Correct this payment">
+                          <Pencil size={15} />
+                        </button>
+                        <button
+                          className="icon-btn h-8 w-8 hover:text-[var(--neg-ink)]"
+                          onClick={() => setDeleteTarget(p)}
+                          title="Delete this payment"
+                          aria-label="Delete this payment"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </>
+                    }
+                  />
+                ))}
+              </PhoneList>
+            </div>
+          ) : (
           <div className="grain-card overflow-x-auto">
             <table className="w-full text-sm min-w-[680px]">
               <thead>
@@ -161,6 +208,7 @@ const Payments = ({ role }) => {
               </tbody>
             </table>
           </div>
+          )}
         </>
       )}
 

@@ -91,6 +91,16 @@ export const paymentBadgeClass = (sale) => {
   return "badge-cash";
 };
 
+// A cash/online bill paid a little less (discount, negative) or more (extra) than its price.
+export const billAdjustment = (sale) =>
+  sale?.paymentType === "cash" ? Math.round(((sale.total || 0) - (sale.subtotal ?? sale.total ?? 0)) * 100) / 100 : 0;
+
+export const adjustmentText = (sale) => {
+  const a = billAdjustment(sale);
+  if (!a) return "";
+  return a < 0 ? `${formatMoney(-a)} discount` : `${formatMoney(a)} extra`;
+};
+
 // Turns a "YYYY-MM" month-picker value into the first/last calendar day of that month.
 export const monthBounds = (monthStr) => {
   if (!monthStr) return { from: "", to: "" };

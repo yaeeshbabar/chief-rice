@@ -4,11 +4,24 @@ import Loader from "../../components/Loader.jsx";
 import Modal from "../../components/Modal.jsx";
 import ReasonModal from "../../components/ReasonModal.jsx";
 import CommissionPanel from "../../components/CommissionPanel.jsx";
+import { PhoneList, PhoneRow } from "../../components/PhoneList.jsx";
+import { useIsPhone } from "../../utils/useIsPhone.js";
 import { formatMoney, formatDateTime } from "../../utils/format.js";
 
 const categories = ["Dukan Kharch Khata", "Asim Kharcha Khata", "Salary"];
 
+// "Rent, Store Rent, 2 × 25KG Sela (removed from stock)"
+const expenseDetail = (e) =>
+  [
+    e.subCategory,
+    e.description,
+    e.relatedQuantityBori > 0 ? `${e.relatedQuantityBori} × ${e.relatedBoriSize}KG ${e.relatedRiceType?.name || ""} (removed from stock)` : "",
+  ]
+    .filter(Boolean)
+    .join(", ");
+
 const Expenses = () => {
+  const isPhone = useIsPhone();
   const [expenses, setExpenses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState({ from: "", to: "", category: "" });
@@ -133,7 +146,7 @@ const Expenses = () => {
         </div>
         {byCategory.map((c) => (
           <div className="grain-card p-3" key={c.category}>
-            <p className="text-xs text-[var(--color-coffee-soft)] truncate">{c.category}</p>
+            <p className="text-xs text-[var(--color-coffee-soft)]">{c.category}</p>
             <p className="font-display font-semibold">{formatMoney(c.total)}</p>
           </div>
         ))}
@@ -143,6 +156,29 @@ const Expenses = () => {
 
       {loading ? (
         <Loader />
+      ) : isPhone ? (
+        <div className="grain-card">
+          <PhoneList empty="No expenses recorded for this filter">
+            {expenses.map((e) => (
+              <PhoneRow
+                key={e._id}
+                title={e.category}
+                sub={expenseDetail(e) || undefined}
+                meta={`${formatDateTime(e.createdAt)}, ${e.createdBy?.name || ""}`}
+                amount={formatMoney(e.amount)}
+                amountSub={
+                  e.relatedSale ? (
+                    "From a bill"
+                  ) : (
+                    <button className="text-xs font-semibold text-[var(--accent-ink)]" onClick={() => openEditExpense(e)}>
+                      Edit
+                    </button>
+                  )
+                }
+              />
+            ))}
+          </PhoneList>
+        </div>
       ) : (
         <div className="grain-card overflow-x-auto">
           <table className="w-full text-sm min-w-[680px]">

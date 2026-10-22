@@ -5,6 +5,7 @@ import Wapsi from "../models/Wapsi.js";
 import CashHandover from "../models/CashHandover.js";
 import BankAccount from "../models/BankAccount.js";
 import CommissionPayout from "../models/CommissionPayout.js";
+import { wapsiCashOut } from "./wapsiItems.js";
 
 // Computes what should physically/actually be sitting in the two pools the
 // salesman can hand over from: the cash counter, and the salesman's own bank
@@ -16,7 +17,7 @@ export const computeCashPools = async () => {
     Sale.find({ paymentType: "cash", cancelled: false }).select("total paymentMethod account"),
     Payment.find().select("amount paymentMethod account directToAsim"),
     Expense.find().select("amount"),
-    Wapsi.find().select("cashReturned"),
+    Wapsi.find().select("cashReturned balanceAdjustment refundTo"),
     CashHandover.find().select("amount source"),
     BankAccount.find().select("ownerType"),
     CommissionPayout.find().select("amount"),
@@ -34,7 +35,7 @@ export const computeCashPools = async () => {
   );
 
   const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0);
-  const totalWapsiCash = wapsi.reduce((sum, w) => sum + (w.cashReturned || 0), 0);
+  const totalWapsiCash = wapsi.reduce((sum, w) => sum + wapsiCashOut(w), 0);
   const cashHandedOver = handovers.filter((h) => h.source !== "account").reduce((sum, h) => sum + h.amount, 0);
   const accountHandedOver = handovers.filter((h) => h.source === "account").reduce((sum, h) => sum + h.amount, 0);
 

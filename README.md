@@ -36,6 +36,9 @@ business.
 - Sell **khula** (loose rice by weight) and **bori** (25 KG / 50 KG bags) on the same bill
 - Several bills open at once, one tab per waiting customer
 - Cash, online transfer or **credit (khata)** payments
+- **Amount received** on cash and online bills: if the customer pays a little less it is saved as a
+  discount, a little more as extra. The sale and the profit use the money actually received, so a
+  discount only shows as a loss when the money received is below the rice cost
 - Online payments record exactly where the money landed, e.g. **Asim Account (UBL)** or
   **Asim Account (Faysal Bank)**, because the business uses several banks
 - Print an **A4 invoice** or an **80mm thermal receipt**
@@ -52,8 +55,9 @@ business.
 - An animated container for each rice type shows how much khula is left
 - **End a batch** early when the khula is finished in real life: whatever the system still shows
   (e.g. 750 g) is recorded as shortfall. The Khula record shows both kinds of shortfall
-- **Wapsi** (returns) put rice back into stock or khula (a 4 KG return makes 75 KG into 79 KG)
-  and refund cash or reduce the customer's khata
+- **Wapsi** (returns): bori and khula come back together in one return. Bori go back into main
+  stock and khula into that rice type's khula (a 4 KG return makes 75 KG into 79 KG). Give cash back
+  to a walk-in customer, or pick a creditor and cut the amount from their khata
 
 **Corrections, with a record of every change**
 - Rename or delete a rice type (old bills and records are kept)
@@ -72,7 +76,10 @@ business.
 - **Expenses**: shop expenses, the owner's personal expenses and salaries
 - **Cash handling**: what is in the counter and the salesman's account, and every handover to the
   owner: cash given in hand, cash deposited into one of the owner's bank accounts, or a transfer from
-  the salesman's account (with the account it went into)
+  the salesman's account (with the account it went into). The history also lists every khata
+  payment from creditors, and can show only handovers or only creditor payments
+- **Reports**: cash sales and credit sales, each with its own profit (sale minus rice cost,
+  commission and delivery), and the total recovered from creditors
 - **Total value**: what the shop has right now: stock at the shop (bori + khula), what all creditors
   owe, and cash in store, added together. Hidden until you tap Show, like Cash in store
 - **Paid to Asim**: every payment that reached the owner, one by one: each bank account (bills,
@@ -89,7 +96,8 @@ business.
 - The admin can **add logins**, rename them, switch a login off (it is signed out at once) and set
   a new password for any login; phones still using the old password are logged out
 - Find any bill by its invoice number
-- Clean, minimal interface with **light and dark** themes, works on mobile
+- Clean, minimal interface with **light and dark** themes
+- Admin pages made for the phone: every amount shows in full, and long tables become simple lists
 - All dates and daily bill numbers follow **Pakistan time**
 
 ## Screenshots

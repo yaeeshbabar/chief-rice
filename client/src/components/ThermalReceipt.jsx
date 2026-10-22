@@ -1,5 +1,5 @@
 import { createPortal } from "react-dom";
-import { formatMoney, formatGrams, formatDateTime, paymentLabel } from "../utils/format.js";
+import { formatMoney, formatGrams, formatDateTime, paymentLabel, billAdjustment } from "../utils/format.js";
 
 // 80mm thermal paper receipt (about 72mm printable). Rendered in a portal on <body>, hidden on
 // screen, and only shown when printing with data-print="thermal". Customer-facing only:
@@ -48,8 +48,17 @@ const ThermalReceipt = ({ sale, asimAccounts = [] }) => {
         </div>
       ))}
       <Dash />
+      {billAdjustment(sale) !== 0 && (
+        <>
+          <Row left="Bill" right={formatMoney(sale.subtotal)} />
+          <Row
+            left={billAdjustment(sale) < 0 ? "Discount" : "Extra"}
+            right={`${billAdjustment(sale) < 0 ? "- " : "+ "}${formatMoney(Math.abs(billAdjustment(sale)))}`}
+          />
+        </>
+      )}
       <div className="tr-row tr-total">
-        <span>TOTAL</span>
+        <span>{billAdjustment(sale) !== 0 ? "PAID" : "TOTAL"}</span>
         <span>{formatMoney(sale.total)}</span>
       </div>
       <Row left="Payment" right={paymentLabel(sale)} />

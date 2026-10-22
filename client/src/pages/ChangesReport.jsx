@@ -3,6 +3,8 @@ import { Link } from "react-router-dom";
 import api from "../api/axios.js";
 import Loader from "../components/Loader.jsx";
 import Modal from "../components/Modal.jsx";
+import { PhoneList, PhoneRow } from "../components/PhoneList.jsx";
+import { useIsPhone } from "../utils/useIsPhone.js";
 import { formatMoney, formatDateTime } from "../utils/format.js";
 
 // Areas of the app that record corrections in the change log
@@ -42,6 +44,7 @@ const actionLabel = (action) =>
   })[action] || action;
 
 const BillChanges = ({ role }) => {
+  const isPhone = useIsPhone();
   const [sales, setSales] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -62,6 +65,33 @@ const BillChanges = ({ role }) => {
 
   return (
     <>
+      {isPhone ? (
+        <div className="grain-card">
+          <PhoneList empty="No bills have been edited or deleted yet">
+            {sales.map((s) => (
+              <PhoneRow
+                key={s._id}
+                title={
+                  <>
+                    <Link to={`${invoiceBase}/${s._id}`} className="font-semibold text-[var(--accent-ink)]">
+                      #{s.invoiceNumber}
+                    </Link>{" "}
+                    {s.cancelled ? <span className="badge badge-over">Deleted</span> : <span className="badge badge-active">Edited</span>}
+                  </>
+                }
+                sub={`${s.previousVersions?.length || 0} version(s)`}
+                meta={formatDateTime(s.updatedAt)}
+                amount={formatMoney(s.total)}
+                amountSub={
+                  <button className="text-xs font-semibold text-[var(--accent-ink)]" onClick={() => setViewing(s)}>
+                    View history
+                  </button>
+                }
+              />
+            ))}
+          </PhoneList>
+        </div>
+      ) : (
       <div className="grain-card overflow-x-auto">
         <table className="w-full text-sm min-w-[680px]">
           <thead>
@@ -105,6 +135,7 @@ const BillChanges = ({ role }) => {
           </tbody>
         </table>
       </div>
+      )}
 
       <Modal open={!!viewing} onClose={() => setViewing(null)} title={`Invoice #${viewing?.invoiceNumber} history`} wide>
         {viewing?.cancelled && (
@@ -138,6 +169,7 @@ const BillChanges = ({ role }) => {
 
 // Every other correction: stock entries, counts, rice types, khula, payments, returns...
 const OtherChanges = () => {
+  const isPhone = useIsPhone();
   const [area, setArea] = useState("");
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -183,6 +215,24 @@ const OtherChanges = () => {
         <Loader />
       ) : error ? (
         <p className="grain-card p-6 text-center text-sm text-[var(--neg-ink)]">{error}</p>
+      ) : isPhone ? (
+        <div className="grain-card">
+          <PhoneList empty="No changes recorded yet">
+            {rows.map((r) => (
+              <PhoneRow
+                key={r._id}
+                title={
+                  <>
+                    <span className={`badge ${actionBadge(r.action)} mr-1.5`}>{actionLabel(r.action)}</span>
+                    {r.summary}
+                  </>
+                }
+                sub={r.reason ? `Reason: ${r.reason}` : undefined}
+                meta={`${formatDateTime(r.createdAt)}, ${areaLabel(r.area)}${r.createdBy?.name ? `, ${r.createdBy.name}` : ""}`}
+              />
+            ))}
+          </PhoneList>
+        </div>
       ) : (
         <div className="grain-card overflow-x-auto">
           <table className="w-full text-sm min-w-[720px]">

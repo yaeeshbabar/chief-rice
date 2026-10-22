@@ -118,7 +118,7 @@ export const deleteRiceType = asyncHandler(async (req, res) => {
 
   const [usedInSales, usedInWapsi, usedInExpenses, usedInKhula, usedInStock] = await Promise.all([
     Sale.exists({ "items.riceType": type._id }),
-    Wapsi.exists({ riceType: type._id }),
+    Wapsi.exists({ $or: [{ riceType: type._id }, { "items.riceType": type._id }] }),
     Expense.exists({ relatedRiceType: type._id }),
     KhulaBatch.exists({ riceType: type._id }),
     StockTransaction.exists({ riceType: type._id }),

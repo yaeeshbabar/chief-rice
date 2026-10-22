@@ -74,10 +74,12 @@ export const createCustomer = asyncHandler(async (req, res) => {
 export const getCustomer = asyncHandler(async (req, res) => {
   const customer = await Customer.findById(req.params.id);
   if (!customer) return res.status(404).json({ message: "Customer not found" });
-  const sales = await Sale.find({ customer: customer._id, cancelled: false })
-    .populate("createdBy", "name")
-    .sort({ createdAt: -1 });
-  res.json({ customer, sales });
+  const [sales, returns] = await Promise.all([
+    Sale.find({ customer: customer._id, cancelled: false }).populate("createdBy", "name").sort({ createdAt: -1 }),
+    // Returns that were cut from this khata
+    Wapsi.find({ customer: customer._id, balanceAdjustment: { $gt: 0 } }).populate("createdBy", "name").sort({ createdAt: -1 }),
+  ]);
+  res.json({ customer, sales, returns });
 });
 
 export const updateCustomer = asyncHandler(async (req, res) => {

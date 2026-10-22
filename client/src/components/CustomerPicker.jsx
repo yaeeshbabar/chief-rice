@@ -4,19 +4,20 @@ import { formatMoney } from "../utils/format.js";
 
 // A proper searchable combobox for picking a credit customer during billing,
 // with a clear "selected" state and a toggle to add a brand-new customer instead.
-const CustomerPicker = ({ addingNew, onModeChange, selectedId, onSelect, newCustomer, onNewCustomerChange }) => {
+// existingOnly: just search and pick an existing creditor (e.g. for a return).
+const CustomerPicker = ({ addingNew, onModeChange, selectedId, onSelect, newCustomer, onNewCustomerChange, existingOnly = false }) => {
   const [search, setSearch] = useState("");
   const [customers, setCustomers] = useState([]);
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState(null);
 
   useEffect(() => {
-    if (addingNew) return;
+    if (addingNew && !existingOnly) return;
     const handle = setTimeout(() => {
       api.get(`/customers${search ? `?search=${encodeURIComponent(search)}` : ""}`).then((res) => setCustomers(res.data));
     }, 150);
     return () => clearTimeout(handle);
-  }, [search, addingNew]);
+  }, [search, addingNew, existingOnly]);
 
   useEffect(() => {
     if (!selectedId) {
@@ -31,7 +32,8 @@ const CustomerPicker = ({ addingNew, onModeChange, selectedId, onSelect, newCust
   }, [selectedId, customers]);
 
   return (
-    <div className="flex flex-col gap-2 border-t border-[var(--color-husk)] pt-3">
+    <div className={`flex flex-col gap-2 ${existingOnly ? "" : "border-t border-[var(--color-husk)] pt-3"}`}>
+      {!existingOnly && (
       <div className="segmented self-start">
         <button
           type="button"
@@ -48,8 +50,9 @@ const CustomerPicker = ({ addingNew, onModeChange, selectedId, onSelect, newCust
           New customer
         </button>
       </div>
+      )}
 
-      {!addingNew ? (
+      {existingOnly || !addingNew ? (
         <div className="relative">
           {selected ? (
             <div className="flex items-center justify-between bg-[var(--surface-soft-brand)] border border-[var(--color-wheat)] rounded-lg px-3 py-2.5">

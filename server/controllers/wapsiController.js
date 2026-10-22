@@ -8,94 +8,134 @@ import Sale from "../models/Sale.js";
 import StockTransaction from "../models/StockTransaction.js";
 import { asyncHandler } from "../middleware/errorHandler.js";
 import { currentCostPerKg } from "../utils/khulaPools.js";
-import { logChange, kgText, rs, requireReason } from "../utils/changeLog.js";
+import { computeCashPools } from "../utils/cashPools.js";
+import { logChange, rs, requireReason } from "../utils/changeLog.js";
+import { wapsiItems, wapsiItemText, wapsiRefund } from "../utils/wapsiItems.js";
 
+const isGiven = (value) => value !== undefined && value !== null && value !== "";
+// "Rehman Traders' khata", "Imran's khata"
+const whose = (name) => (/s$/i.test(name) ? `${name}'` : `${name}'s`);
+const fail = (res, status, message) => res.status(status).json({ message });
+
+// A return: several bori and khula items at once. The money goes back either in cash (out of the
+// counter) or off a creditor's khata. Bori go back into main stock, khula into that type's khula.
+// Everything is checked first, so a return that can't go through changes nothing.
 export const createWapsi = asyncHandler(async (req, res) => {
-  const {
-    originalSaleId,
-    itemType,
-    riceTypeId,
-    boriSize,
-    quantityGrams,
-    quantityBori,
-    cashReturned,
+  const body = req.body || {};
+  // Older screens sent one item with "cashReturned"; newer ones send a list of items.
+  const listGiven = Array.isArray(body.items) && body.items.length > 0;
+  const rawItems = listGiven
+    ? body.items
+    : body.itemType
+      ? [{ itemType: body.itemType, riceTypeId: body.riceTypeId, boriSize: body.boriSize, quantityGrams: body.quantityGrams, quantityBori: body.quantityBori }]
+      : [];
+  if (!rawItems.length) return fail(res, 400, "Add at least one bori or khula item");
+  if (rawItems.length > 30) return fail(res, 400, "Too many items in one return");
+
+  let refundTo = body.refundTo === "khata" ? "khata" : "cash";
+  const amount = Number(isGiven(body.amount) ? body.amount : body.cashReturned || 0);
+  if (!Number.isFinite(amount) || amount < 0) return fail(res, 400, "Enter a valid amount");
+  const reason = String(body.reason || "").trim();
+
+  let originalSale = null;
+  if (isGiven(body.originalSaleId)) {
+    originalSale = await Sale.findById(body.originalSaleId).catch(() => null);
+    if (!originalSale) return fail(res, 404, "Invoice not found");
+  }
+  let customerId = body.customerId;
+  // Older screens: "reduce this customer's khata" on a linked credit bill.
+  if (!listGiven && body.adjustCustomerBalance && originalSale?.customer) {
+    refundTo = "khata";
+    customerId = originalSale.customer;
+  }
+
+  // Check every item
+  const items = [];
+  for (const raw of rawItems) {
+    const riceType = await RiceType.findById(raw.riceTypeId).catch(() => null);
+    if (!riceType) return fail(res, 404, "Rice type not found");
+    if (raw.itemType === "bori") {
+      const size = Number(raw.boriSize);
+      const qty = Number(raw.quantityBori);
+      if (![25, 50].includes(size)) return fail(res, 400, "Pick 25 KG or 50 KG bori");
+      if (!Number.isInteger(qty) || qty < 1) return fail(res, 400, `Enter how many ${riceType.name} bori came back`);
+      items.push({ itemType: "bori", riceType: riceType._id, riceTypeName: riceType.name, boriSize: size, quantityBori: qty });
+    } else if (raw.itemType === "khula") {
+      const grams = Math.round(Number(raw.quantityGrams));
+      if (!Number.isFinite(grams) || grams <= 0) return fail(res, 400, `Enter the ${riceType.name} khula weight in grams`);
+      items.push({ itemType: "khula", riceType: riceType._id, riceTypeName: riceType.name, quantityGrams: grams });
+    } else {
+      return fail(res, 400, "Each item must be bori or khula");
+    }
+  }
+
+  // Check the money
+  let customer = null;
+  if (refundTo === "khata") {
+    if (!isGiven(customerId)) return fail(res, 400, "Pick the creditor");
+    customer = await Customer.findById(customerId).catch(() => null);
+    if (!customer) return fail(res, 404, "Creditor not found");
+    if (amount > customer.balance + 0.001) {
+      return fail(res, 400, `${customer.name} owes only ${rs(customer.balance)}, so ${rs(amount)} can't be cut from the khata`);
+    }
+  } else if (amount > 0) {
+    const pools = await computeCashPools();
+    if (amount > pools.cashInCounter + 0.001) {
+      return fail(res, 400, `Only ${rs(Math.max(0, pools.cashInCounter))} is in the cash counter`);
+    }
+  }
+
+  // Apply
+  const wapsi = new Wapsi({
+    originalSale: originalSale?._id,
+    refundTo,
+    amount,
+    cashReturned: refundTo === "cash" ? amount : 0,
+    customer: customer?._id,
+    balanceAdjustment: refundTo === "khata" ? amount : 0,
     reason,
-    adjustCustomerBalance,
-  } = req.body;
-
-  const riceType = await RiceType.findById(riceTypeId);
-  if (!riceType) return res.status(404).json({ message: "Rice type not found" });
-
-  let khulaBatch = null;
-  if (itemType === "bori") {
-    if (!boriSize || !quantityBori) {
-      return res.status(400).json({ message: "Bori size and quantity are required" });
-    }
-    let stock = await Stock.findOne({ riceType: riceTypeId, boriSize });
-    if (!stock) stock = await Stock.create({ riceType: riceTypeId, boriSize, quantity: 0 });
-    stock.quantity += Number(quantityBori);
-    await stock.save();
-    await StockTransaction.create({
-      riceType: riceTypeId,
-      boriSize,
-      type: "WAPSI_IN",
-      quantity: Number(quantityBori),
-      note: reason || "Bori returned by customer",
-      createdBy: req.user._id,
-    });
-  } else if (itemType === "khula") {
-    if (!quantityGrams || Number(quantityGrams) <= 0) return res.status(400).json({ message: "Quantity is required" });
-    // Returned loose rice is added to this type's khula as its own lot, so it always counts
-    // (e.g. 75 KG in khula + 4 KG returned = 79 KG).
-    khulaBatch = await KhulaBatch.create({
-      riceType: riceTypeId,
-      source: "RETURN",
-      totalGrams: Number(quantityGrams),
-      remainingGrams: Number(quantityGrams),
-      costPerKg: await currentCostPerKg(riceTypeId),
-      openedBy: req.user._id,
-      note: reason || "Returned by customer",
-    });
-  } else {
-    return res.status(400).json({ message: "Invalid item type" });
-  }
-
-  let customerId;
-  let balanceAdjustment = 0;
-  if (originalSaleId && adjustCustomerBalance) {
-    const sale = await Sale.findById(originalSaleId);
-    if (sale && sale.customer) {
-      const customer = await Customer.findById(sale.customer);
-      if (customer) {
-        balanceAdjustment = Number(cashReturned || 0);
-        customer.balance -= balanceAdjustment;
-        await customer.save();
-        customerId = customer._id;
-      }
-    }
-  }
-
-  const wapsi = await Wapsi.create({
-    originalSale: originalSaleId || undefined,
-    itemType,
-    riceType: riceTypeId,
-    riceTypeName: riceType.name,
-    boriSize: boriSize || undefined,
-    quantityGrams: quantityGrams || undefined,
-    quantityBori: quantityBori || undefined,
-    cashReturned: Number(cashReturned || 0),
-    reason: reason || "",
-    khulaBatch: khulaBatch?._id,
-    customer: customerId,
-    balanceAdjustment,
     createdBy: req.user._id,
   });
-  if (khulaBatch) {
-    khulaBatch.wapsi = wapsi._id;
-    await khulaBatch.save();
+  for (const item of items) {
+    if (item.itemType === "bori") {
+      let stock = await Stock.findOne({ riceType: item.riceType, boriSize: item.boriSize });
+      if (!stock) stock = await Stock.create({ riceType: item.riceType, boriSize: item.boriSize, quantity: 0 });
+      stock.quantity += item.quantityBori;
+      await stock.save();
+      await StockTransaction.create({
+        riceType: item.riceType,
+        boriSize: item.boriSize,
+        type: "WAPSI_IN",
+        quantity: item.quantityBori,
+        note: reason || "Bori returned by customer",
+        createdBy: req.user._id,
+      });
+    } else {
+      // Returned loose rice is its own lot in that type's khula (75 KG + 4 KG returned = 79 KG).
+      const batch = await KhulaBatch.create({
+        riceType: item.riceType,
+        source: "RETURN",
+        totalGrams: item.quantityGrams,
+        remainingGrams: item.quantityGrams,
+        costPerKg: await currentCostPerKg(item.riceType),
+        openedBy: req.user._id,
+        note: reason || "Returned by customer",
+        wapsi: wapsi._id,
+      });
+      item.khulaBatch = batch._id;
+    }
   }
+  wapsi.items = items;
+  if (customer && amount > 0) {
+    customer.balance -= amount;
+    await customer.save();
+  }
+  await wapsi.save();
 
-  const populated = await wapsi.populate("createdBy", "name role");
+  const populated = await Wapsi.findById(wapsi._id)
+    .populate("createdBy", "name role")
+    .populate("customer", "name")
+    .populate("originalSale", "invoiceNumber");
   res.status(201).json(populated);
 });
 
@@ -106,68 +146,94 @@ export const listWapsi = asyncHandler(async (req, res) => {
   if (range) filter.createdAt = range;
   const records = await Wapsi.find(filter)
     .populate("createdBy", "name role")
+    .populate("customer", "name")
     .populate("originalSale", "invoiceNumber")
     .sort({ createdAt: -1 });
   res.json(records);
 });
 
-// Undo a return that was recorded by mistake: the rice comes back out of stock/khula and
-// any khata change is reversed. Blocked if the returned rice has already been sold again.
+// Takes returned khula back out: from the return's own lot first, then the oldest lots.
+const takeBackKhula = async (item, userId) => {
+  const active = await KhulaBatch.find({ riceType: item.riceType, status: "ACTIVE" }).sort({ createdAt: 1 });
+  const ordered = [
+    ...active.filter((b) => String(b._id) === String(item.khulaBatch)),
+    ...active.filter((b) => String(b._id) !== String(item.khulaBatch)),
+  ];
+  let need = item.quantityGrams || 0;
+  for (const b of ordered) {
+    if (need <= 0) break;
+    const take = Math.min(b.remainingGrams, need);
+    if (take <= 0) continue;
+    b.remainingGrams -= take;
+    need -= take;
+    const isOwnUntouchedLot = String(b._id) === String(item.khulaBatch) && b.remainingGrams === 0 && b.totalGrams === take;
+    if (isOwnUntouchedLot) {
+      await b.deleteOne();
+    } else {
+      if (b.remainingGrams === 0) {
+        b.status = "FINISHED";
+        b.closedAt = new Date();
+        b.closedBy = userId;
+      }
+      await b.save();
+    }
+  }
+};
+
+// Undo a return that was recorded by mistake: every item comes back out of stock/khula and the
+// khata cut is reversed. Blocked if any of the returned rice has already been sold again.
 export const deleteWapsi = asyncHandler(async (req, res) => {
   const reason = requireReason(req.body?.reason);
-  const wapsi = await Wapsi.findById(req.params.id);
-  if (!wapsi) return res.status(404).json({ message: "Return not found" });
+  const wapsi = await Wapsi.findById(req.params.id).populate("customer", "name");
+  if (!wapsi) return fail(res, 404, "Return not found");
+  const items = wapsiItems(wapsi);
 
-  if (wapsi.itemType === "bori") {
-    const stock = await Stock.findOne({ riceType: wapsi.riceType, boriSize: wapsi.boriSize });
-    if (!stock || stock.quantity < wapsi.quantityBori) {
-      return res.status(400).json({ message: "These returned bori have already been sold or opened, so the return can't be undone" });
+  // Check first
+  const boriNeed = new Map();
+  const khulaNeed = new Map();
+  for (const i of items) {
+    if (i.itemType === "bori") {
+      const key = `${i.riceType}|${i.boriSize}`;
+      boriNeed.set(key, (boriNeed.get(key) || 0) + (i.quantityBori || 0));
+    } else {
+      const key = String(i.riceType);
+      khulaNeed.set(key, (khulaNeed.get(key) || 0) + (i.quantityGrams || 0));
     }
-    stock.quantity -= wapsi.quantityBori;
-    await stock.save();
-    await StockTransaction.create({
-      riceType: wapsi.riceType,
-      boriSize: wapsi.boriSize,
-      type: "ADJUSTMENT",
-      quantity: wapsi.quantityBori,
-      note: `Return undone: ${reason}`,
-      createdBy: req.user._id,
-    });
-  } else {
-    const grams = wapsi.quantityGrams || 0;
-    const active = await KhulaBatch.find({ riceType: wapsi.riceType, status: "ACTIVE" }).sort({ createdAt: 1 });
-    const available = active.reduce((sum, b) => sum + b.remainingGrams, 0);
-    if (available < grams) {
-      return res.status(400).json({ message: "This returned rice has already been sold again, so the return can't be undone" });
+  }
+  for (const [key, qty] of boriNeed) {
+    const [riceType, size] = key.split("|");
+    const stock = await Stock.findOne({ riceType, boriSize: Number(size) });
+    if (!stock || stock.quantity < qty) {
+      return fail(res, 400, "These returned bori have already been sold or opened, so the return can't be undone");
     }
-    // Take it back from the return's own lot first, then from the oldest lots.
-    const ordered = [
-      ...active.filter((b) => String(b._id) === String(wapsi.khulaBatch)),
-      ...active.filter((b) => String(b._id) !== String(wapsi.khulaBatch)),
-    ];
-    let need = grams;
-    for (const b of ordered) {
-      if (need <= 0) break;
-      const take = Math.min(b.remainingGrams, need);
-      if (take <= 0) continue;
-      b.remainingGrams -= take;
-      need -= take;
-      const isOwnUntouchedLot = String(b._id) === String(wapsi.khulaBatch) && b.remainingGrams === 0 && b.totalGrams === take;
-      if (isOwnUntouchedLot) {
-        await b.deleteOne();
-      } else {
-        if (b.remainingGrams === 0) {
-          b.status = "FINISHED";
-          b.closedAt = new Date();
-          b.closedBy = req.user._id;
-        }
-        await b.save();
-      }
+  }
+  for (const [riceType, grams] of khulaNeed) {
+    const active = await KhulaBatch.find({ riceType, status: "ACTIVE" });
+    if (active.reduce((sum, b) => sum + b.remainingGrams, 0) < grams) {
+      return fail(res, 400, "This returned rice has already been sold again, so the return can't be undone");
     }
   }
 
+  // Undo
+  for (const i of items) {
+    if (i.itemType === "bori") {
+      const stock = await Stock.findOne({ riceType: i.riceType, boriSize: i.boriSize });
+      stock.quantity -= i.quantityBori;
+      await stock.save();
+      await StockTransaction.create({
+        riceType: i.riceType,
+        boriSize: i.boriSize,
+        type: "ADJUSTMENT",
+        quantity: i.quantityBori,
+        note: `Return undone: ${reason}`,
+        createdBy: req.user._id,
+      });
+    } else {
+      await takeBackKhula(i, req.user._id);
+    }
+  }
   if (wapsi.balanceAdjustment > 0 && wapsi.customer) {
-    const customer = await Customer.findById(wapsi.customer);
+    const customer = await Customer.findById(wapsi.customer._id || wapsi.customer);
     if (customer) {
       customer.balance += wapsi.balanceAdjustment;
       await customer.save();
@@ -175,11 +241,14 @@ export const deleteWapsi = asyncHandler(async (req, res) => {
   }
 
   await wapsi.deleteOne();
-  const qty = wapsi.itemType === "bori" ? `${wapsi.quantityBori} × ${wapsi.boriSize}KG bori` : kgText(wapsi.quantityGrams);
+  const money =
+    wapsi.refundTo === "khata" || wapsi.balanceAdjustment > 0
+      ? `${rs(wapsi.balanceAdjustment || 0)} back on ${whose(wapsi.customer?.name || "the customer")} khata`
+      : `${rs(wapsiRefund(wapsi))} cash refund`;
   await logChange(req, {
     area: "wapsi",
     action: "undo",
-    summary: `Return undone: ${qty} ${wapsi.riceTypeName}, ${rs(wapsi.cashReturned)} refund${wapsi.balanceAdjustment > 0 ? " (khata put back)" : ""}`,
+    summary: `Return undone: ${items.map(wapsiItemText).join(", ")}; ${money}`,
     reason,
     before: wapsi.toObject(),
   });

@@ -216,6 +216,22 @@
     gap: 0.75rem;
   }
 
+  /* The number in a stat card: smaller on phones so it always fits, never cut off */
+  .stat-value {
+    font-size: 1.125rem;
+    line-height: 1.6rem;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    color: var(--ink);
+    overflow-wrap: anywhere;
+  }
+  @media (min-width: 640px) {
+    .stat-value {
+      font-size: 1.5rem;
+      line-height: 2rem;
+    }
+  }
+
   .btn-primary,
   .btn-outline,
   .btn-danger,
@@ -331,6 +347,34 @@
   input[type="date"].field-input,
   input[type="month"].field-input {
     min-height: 2.4rem;
+  }
+  /* iPhone Safari: let date and month boxes shrink to their space instead of running off the screen */
+  @supports (-webkit-touch-callout: none) {
+    input[type="date"].field-input,
+    input[type="month"].field-input {
+      -webkit-appearance: none;
+      appearance: none;
+      display: block;
+      min-width: 0;
+    }
+    input[type="date"].field-input::-webkit-date-and-time-value,
+    input[type="month"].field-input::-webkit-date-and-time-value {
+      text-align: left;
+    }
+  }
+
+  /* Phones: filters share the width in neat rows */
+  @media (max-width: 639px) {
+    .filter-bar > * {
+      flex: 1 1 9rem;
+      min-width: 0;
+    }
+    .filter-bar > .segmented {
+      flex-basis: 100%;
+    }
+    .filter-bar > .segmented > .segmented-item {
+      flex: 1 1 auto;
+    }
   }
 
   /* Status labels: a coloured dot carries the meaning, the text stays calm. */

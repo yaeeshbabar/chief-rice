@@ -57,7 +57,8 @@ const run = async () => {
     }
 
     const rideCost = sale.rideCost || 0;
-    const profitBeforeCommission = sale.subtotal - costOfGoods - rideCost;
+    // Profit is on what was received (total), so a discount or extra on the bill is kept.
+    const profitBeforeCommission = (sale.total ?? sale.subtotal) - costOfGoods - rideCost;
 
     let commissionPercent = 0;
     let commissionAmount = 0;

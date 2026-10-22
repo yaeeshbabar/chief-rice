@@ -8,7 +8,7 @@ import CustomerPicker from "../components/CustomerPicker.jsx";
 import ThermalReceipt from "../components/ThermalReceipt.jsx";
 import BrandMark from "../components/BrandMark.jsx";
 import { printInvoice } from "../utils/printReceipt.js";
-import { formatMoney, formatGrams, formatDateTime, paymentLabel, paymentBadgeClass } from "../utils/format.js";
+import { formatMoney, formatGrams, formatDateTime, paymentLabel, paymentBadgeClass, billAdjustment } from "../utils/format.js";
 import { useAuth } from "../context/AuthContext.jsx";
 
 const InvoiceView = ({ role }) => {
@@ -54,6 +54,9 @@ const InvoiceView = ({ role }) => {
       selectedCustomerId: sale.customer?._id || "",
       newCustomer: { name: "", shopName: "", phone: "", address: "" },
       items: sale.items.map((i) => ({ ...i, riceTypeId: i.riceType?._id || i.riceType })),
+      // Until the amount received is typed, the bill keeps the same discount/extra as before
+      amountReceived: "",
+      receivedTouched: false,
       editNote: "",
     });
     setShowEdit(true);
@@ -95,6 +98,8 @@ const InvoiceView = ({ role }) => {
       if (form.paymentType === "credit") {
         if (form.addingNewCustomer) payload.newCustomer = form.newCustomer;
         else payload.customerId = form.selectedCustomerId;
+      } else if (form.receivedTouched && form.amountReceived !== "") {
+        payload.amountReceived = Number(form.amountReceived);
       }
       await api.patch(`/sales/${id}`, payload);
       setShowEdit(false);
@@ -129,6 +134,15 @@ const InvoiceView = ({ role }) => {
 
   const backTo = role === "admin" ? "/admin/invoices" : "/salesman/invoices";
   const canEdit = !sale.cancelled;
+  // Paid a little less (discount) or more (extra) than the bill price; the split of the profit
+  const adjustment = billAdjustment(sale);
+  const priceProfit = (sale.subtotal ?? sale.total) - (sale.costOfGoods || 0);
+  const editSubtotal = form ? form.items.reduce((sum, i) => sum + (Number(i.total) || 0), 0) : 0;
+  // Not typed: the same discount/extra as before stays on the bill (what the server keeps)
+  const keptAdjusted = Math.round((editSubtotal + (sale.paymentType === "cash" ? adjustment : 0)) * 100) / 100;
+  const keptReceived = keptAdjusted > 0 ? keptAdjusted : editSubtotal;
+  const editReceived = form?.receivedTouched && form.amountReceived !== "" ? Number(form.amountReceived) : keptReceived;
+  const editAdjustment = form && form.paymentType === "cash" ? Math.round((editReceived - editSubtotal) * 100) / 100 : 0;
 
   return (
     <div className="flex flex-col gap-5">
@@ -214,9 +228,9 @@ const InvoiceView = ({ role }) => {
           <thead>
             <tr className="text-left text-[var(--color-coffee-soft)] border-b border-[var(--color-husk)]">
               <th className="py-2 font-medium">Item</th>
-              <th className="py-2 font-medium">Qty</th>
-              <th className="py-2 font-medium text-right">Rate</th>
-              <th className="py-2 font-medium text-right">Amount</th>
+              <th className="py-2 pl-3 font-medium">Qty</th>
+              <th className="py-2 pl-3 font-medium text-right">Rate</th>
+              <th className="py-2 pl-3 font-medium text-right">Amount</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-[var(--color-husk)]">
@@ -226,19 +240,34 @@ const InvoiceView = ({ role }) => {
                   {item.riceTypeName || item.riceType?.name}
                   <span className="text-[var(--color-coffee-soft)]"> · {item.itemType === "khula" ? "Khula" : `${item.boriSize}KG Bori`}</span>
                 </td>
-                <td className="py-2">{item.itemType === "khula" ? formatGrams(item.quantityGrams) : `${item.quantityBori} bori`}</td>
-                <td className="py-2 text-right">
+                <td className="py-2 pl-3 whitespace-nowrap">{item.itemType === "khula" ? formatGrams(item.quantityGrams) : `${item.quantityBori} bori`}</td>
+                <td className="py-2 pl-3 text-right">
                   {formatMoney(item.pricePerUnit)} / {item.itemType === "khula" ? "KG" : "bori"}
                 </td>
-                <td className="py-2 text-right font-medium">{formatMoney(item.total)}</td>
+                <td className="py-2 pl-3 text-right font-medium whitespace-nowrap">{formatMoney(item.total)}</td>
               </tr>
             ))}
           </tbody>
         </table>
 
         <div className="flex flex-col items-end gap-1 text-sm">
-          <div className="flex justify-between w-48 font-display text-lg font-semibold pt-1 border-t border-[var(--color-husk)] mt-1">
-            <span>Total</span>
+          {adjustment !== 0 && (
+            <>
+              <div className="flex justify-between w-56 text-[var(--ink-muted)]">
+                <span>Bill price</span>
+                <span>{formatMoney(sale.subtotal)}</span>
+              </div>
+              <div className="flex justify-between w-56 text-[var(--ink-muted)]">
+                <span>{adjustment < 0 ? "Discount" : "Extra"}</span>
+                <span>
+                  {adjustment < 0 ? "− " : "+ "}
+                  {formatMoney(Math.abs(adjustment))}
+                </span>
+              </div>
+            </>
+          )}
+          <div className="flex justify-between w-56 font-display text-lg font-semibold pt-1 border-t border-[var(--color-husk)] mt-1">
+            <span>{adjustment !== 0 ? "Paid" : "Total"}</span>
             <span>{formatMoney(sale.total)}</span>
           </div>
         </div>
@@ -263,10 +292,28 @@ const InvoiceView = ({ role }) => {
           </div>
           <div className="flex flex-col divide-y divide-[var(--color-husk)] text-sm">
             {user?.role === "admin" && (
-              <div className="flex justify-between py-2">
-                <span className="text-[var(--color-coffee-soft)]">Cost of goods</span>
-                <span>{formatMoney(sale.costOfGoods)}</span>
-              </div>
+              <>
+                <div className="flex justify-between py-2">
+                  <span className="text-[var(--color-coffee-soft)]">Cost of goods</span>
+                  <span>{formatMoney(sale.costOfGoods)}</span>
+                </div>
+                <div className="flex justify-between py-2">
+                  <span className="text-[var(--color-coffee-soft)]">{priceProfit < 0 ? "Loss on price (sold below cost)" : "Profit on price"}</span>
+                  <span className={priceProfit < 0 ? "text-[var(--neg-ink)]" : ""}>
+                    {priceProfit < 0 ? "− " : ""}
+                    {formatMoney(Math.abs(priceProfit))}
+                  </span>
+                </div>
+                {adjustment !== 0 && (
+                  <div className="flex justify-between py-2">
+                    <span className="text-[var(--color-coffee-soft)]">{adjustment < 0 ? "Discount when paid" : "Extra when paid"}</span>
+                    <span className={adjustment < 0 ? "text-[var(--neg-ink)]" : "text-[var(--pos-ink)]"}>
+                      {adjustment < 0 ? "− " : "+ "}
+                      {formatMoney(Math.abs(adjustment))}
+                    </span>
+                  </div>
+                )}
+              </>
             )}
             {sale.rideCost > 0 && (
               <div className="flex justify-between py-2">
@@ -289,9 +336,10 @@ const InvoiceView = ({ role }) => {
             )}
             {user?.role === "admin" && (
               <div className="flex justify-between py-2 font-semibold">
-                <span>Asim's profit on this bill</span>
+                <span>{sale.profit < 0 ? "Asim's loss on this bill" : "Asim's profit on this bill"}</span>
                 <span className={sale.profit < 0 ? "text-[var(--color-terracotta-deep)]" : "text-[var(--color-sage-deep)]"}>
-                  {formatMoney(sale.profit)}
+                  {sale.profit < 0 ? "− " : ""}
+                  {formatMoney(Math.abs(sale.profit))}
                 </span>
               </div>
             )}
@@ -387,6 +435,37 @@ const InvoiceView = ({ role }) => {
                 </button>
               </div>
             </div>
+
+            {form.paymentType === "cash" && (
+              <div>
+                <label className="field-label" htmlFor="edit-received">
+                  Amount received (Rs)
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    id="edit-received"
+                    type="number"
+                    min="0"
+                    inputMode="decimal"
+                    className="field-input"
+                    value={form.receivedTouched ? form.amountReceived : String(keptReceived)}
+                    placeholder={String(keptReceived)}
+                    onChange={(e) => setForm({ ...form, amountReceived: e.target.value, receivedTouched: true })}
+                  />
+                  <button
+                    type="button"
+                    className="btn-outline shrink-0"
+                    onClick={() => setForm({ ...form, amountReceived: String(Math.round(editSubtotal * 100) / 100), receivedTouched: true })}
+                  >
+                    Same as bill
+                  </button>
+                </div>
+                <p className={`text-xs mt-1.5 ${editAdjustment < 0 ? "text-[var(--warn-ink)]" : editAdjustment > 0 ? "text-[var(--pos-ink)]" : "text-[var(--ink-muted)]"}`}>
+                  Bill {formatMoney(editSubtotal)}.{" "}
+                  {editAdjustment < 0 ? `${formatMoney(-editAdjustment)} discount` : editAdjustment > 0 ? `${formatMoney(editAdjustment)} extra` : "No discount or extra"}
+                </p>
+              </div>
+            )}
 
             {form.paymentType === "credit" && (
               <CustomerPicker

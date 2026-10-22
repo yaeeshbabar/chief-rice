@@ -7,11 +7,15 @@ import Modal from "../components/Modal.jsx";
 import AccountSelect from "../components/AccountSelect.jsx";
 import ReasonModal from "../components/ReasonModal.jsx";
 import { EditPaymentModal, DeletePaymentModal } from "../components/PaymentFixModals.jsx";
+import { PhoneList, PhoneRow } from "../components/PhoneList.jsx";
+import { useIsPhone } from "../utils/useIsPhone.js";
 import { formatMoney, formatDate, formatDateTime, accountLabel } from "../utils/format.js";
+import { returnItemsText } from "../utils/wapsi.js";
 
 const CustomerDetail = ({ role }) => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const isPhone = useIsPhone();
   const [data, setData] = useState(null);
   const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -166,10 +170,37 @@ const CustomerDetail = ({ role }) => {
       </div>
 
       <div className="grid lg:grid-cols-3 gap-4">
-        <div className="lg:col-span-2 grain-card overflow-x-auto">
+        <div className="lg:col-span-2 grain-card overflow-x-auto h-fit">
           <div className="px-4 pt-4">
             <h3 className="section-title mb-1">Bills</h3>
           </div>
+          {isPhone ? (
+            <PhoneList empty="No bills for this customer yet">
+              {sales.map((s) => (
+                <PhoneRow
+                  key={s._id}
+                  title={
+                    <>
+                      <Link to={`${invoiceBase}/${s._id}`} className="font-semibold text-[var(--accent-ink)]">
+                        #{s.invoiceNumber}
+                      </Link>
+                      {s.edited && <span className="badge badge-over ml-2">Edited</span>}
+                    </>
+                  }
+                  sub={`${s.items.length} item(s)`}
+                  meta={formatDateTime(s.createdAt)}
+                  amount={formatMoney(s.total)}
+                />
+              ))}
+              {customer.openingBalance > 0 && (
+                <PhoneRow
+                  title="Old balance"
+                  sub={`From before the app, added ${formatDate(customer.createdAt)}`}
+                  amount={formatMoney(customer.openingBalance)}
+                />
+              )}
+            </PhoneList>
+          ) : (
           <table className="w-full text-sm min-w-[560px]">
             <thead>
               <tr className="text-left text-[var(--color-coffee-soft)] border-b border-[var(--color-husk)]">
@@ -221,8 +252,10 @@ const CustomerDetail = ({ role }) => {
               )}
             </tbody>
           </table>
+          )}
         </div>
 
+        <div className="flex flex-col gap-4">
         <div className="grain-card p-4">
           <h3 className="section-title mb-3">Payment history</h3>
           <div className="flex flex-col divide-y divide-[var(--color-husk)]">
@@ -256,6 +289,27 @@ const CustomerDetail = ({ role }) => {
             ))}
             {!payments.length && <p className="text-sm text-[var(--color-coffee-soft)] py-6 text-center">No payments recorded yet</p>}
           </div>
+        </div>
+
+        {data.returns?.length > 0 && (
+          <div className="grain-card p-4">
+            <h3 className="section-title mb-3">Returns (cut from khata)</h3>
+            <div className="flex flex-col divide-y divide-[var(--color-husk)]">
+              {data.returns.map((r) => (
+                <div key={r._id} className="py-2 text-sm flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p>{returnItemsText(r)}</p>
+                    <p className="text-xs text-[var(--ink-muted)]">
+                      {formatDateTime(r.createdAt)}
+                      {r.createdBy?.name ? `, ${r.createdBy.name}` : ""}
+                    </p>
+                  </div>
+                  <span className="font-semibold shrink-0">− {formatMoney(r.balanceAdjustment)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         </div>
       </div>
 

@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import api from "../api/axios.js";
 import Loader from "../components/Loader.jsx";
 import StatCard from "../components/StatCard.jsx";
+import { PhoneList, PhoneRow } from "../components/PhoneList.jsx";
+import { useIsPhone } from "../utils/useIsPhone.js";
 import { formatGrams, formatDateTime, formatShort, monthBounds, khulaSourceLabel } from "../utils/format.js";
 
 const statusBadge = (b) => {
@@ -55,7 +57,37 @@ const rangeToDates = (key) => {
   return {};
 };
 
+// One lot on a phone: where it came from, the two kinds of shortfall, opened and closed
+const phoneLot = (b) => {
+  const isBori = !b.source || b.source === "BORI";
+  const opening = isBori ? b.openingShortGrams || 0 : 0;
+  const ending = b.status === "ACTIVE" ? 0 : b.shortfallGrams || 0;
+  const parts = [isBori ? `weighed ${formatGrams(b.totalGrams)}` : formatGrams(b.totalGrams)];
+  if (opening > 0) parts.push(`short when weighed ${formatShort(opening)}`);
+  if (opening < 0) parts.push(`${formatShort(opening)} extra when weighed`);
+  if (ending > 0) parts.push(`short at end ${formatShort(ending)}`);
+  if (ending < 0) parts.push(`${formatShort(ending)} extra at end`);
+  const shortTotal = Math.max(0, opening) + Math.max(0, ending);
+  return (
+    <PhoneRow
+      key={b._id}
+      title={
+        <>
+          {b.riceType?.name}, {khulaSourceLabel(b)} {statusBadge(b)}
+        </>
+      }
+      sub={[parts.join(", "), b.note].filter(Boolean).join(". ")}
+      meta={`Opened ${formatDateTime(b.createdAt)}${b.openedBy?.name ? ` by ${b.openedBy.name}` : ""}${
+        b.closedAt ? `, closed ${formatDateTime(b.closedAt)}` : ", still open"
+      }`}
+      amount={shortTotal > 0 ? `${formatShort(shortTotal)} short` : "—"}
+      amountClass={shortTotal > 0 ? "text-[var(--warn-ink)]" : "text-[var(--ink-faint)] font-normal"}
+    />
+  );
+};
+
 const KhulaReport = () => {
+  const isPhone = useIsPhone();
   const [batches, setBatches] = useState([]);
   const [summary, setSummary] = useState(null);
   const [riceTypes, setRiceTypes] = useState([]);
@@ -184,6 +216,11 @@ const KhulaReport = () => {
             <p className="text-xs text-[var(--ink-muted)] -mt-3">Some bori weighed more than their size; that extra is taken off the total.</p>
           )}
 
+          {isPhone ? (
+            <div className="grain-card">
+              <PhoneList empty="No khula lots opened or closed in these dates">{batches.map(phoneLot)}</PhoneList>
+            </div>
+          ) : (
           <div className="grain-card overflow-x-auto">
             <table className="w-full text-sm min-w-[980px]">
               <thead>
@@ -236,6 +273,7 @@ const KhulaReport = () => {
               </tbody>
             </table>
           </div>
+          )}
           <p className="text-xs text-[var(--ink-faint)] -mt-3">Shortfall counts when a bori is weighed and when a batch ends.</p>
         </>
       )}

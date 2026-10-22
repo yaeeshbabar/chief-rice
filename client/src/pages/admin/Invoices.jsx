@@ -2,9 +2,13 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import api from "../../api/axios.js";
 import Loader from "../../components/Loader.jsx";
-import { formatMoney, formatDate, formatDateTime, paymentLabel, paymentBadgeClass, daysAgo } from "../../utils/format.js";
+import StatCard from "../../components/StatCard.jsx";
+import { PhoneList, PhoneRow } from "../../components/PhoneList.jsx";
+import { useIsPhone } from "../../utils/useIsPhone.js";
+import { formatMoney, formatDate, formatDateTime, paymentLabel, paymentBadgeClass, daysAgo, adjustmentText } from "../../utils/format.js";
 
 const Invoices = () => {
+  const isPhone = useIsPhone();
   const [sales, setSales] = useState([]);
   const [loading, setLoading] = useState(true);
   // Last 30 days by default so the list stays quick as bills pile up; older bills by date or invoice number.
@@ -105,23 +109,39 @@ const Invoices = () => {
         )}
       </p>
 
-      <div className="grid grid-cols-3 gap-4">
-        <div className="grain-card p-4">
-          <p className="text-xs text-[var(--color-coffee-soft)]">Invoices</p>
-          <p className="font-display text-xl font-semibold">{sales.length}</p>
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
+        <div className="col-span-2 sm:col-span-1 grid">
+          <StatCard label="Invoices" value={sales.length} accent="wheat" />
         </div>
-        <div className="grain-card p-4">
-          <p className="text-xs text-[var(--color-coffee-soft)]">Cash total</p>
-          <p className="font-display text-xl font-semibold text-[var(--color-sage-deep)]">{formatMoney(totalCash)}</p>
-        </div>
-        <div className="grain-card p-4">
-          <p className="text-xs text-[var(--color-coffee-soft)]">Credit total</p>
-          <p className="font-display text-xl font-semibold text-[var(--color-terracotta-deep)]">{formatMoney(totalCredit)}</p>
-        </div>
+        <StatCard label="Cash total" value={formatMoney(totalCash)} accent="sage" />
+        <StatCard label="Credit total" value={formatMoney(totalCredit)} accent="terracotta" />
       </div>
 
       {loading ? (
         <Loader />
+      ) : isPhone ? (
+        <div className="grain-card">
+          <PhoneList empty="No invoices found">
+            {sales.map((s) => (
+              <PhoneRow
+                key={s._id}
+                title={
+                  <>
+                    <Link to={`/admin/invoices/${s._id}`} className="font-semibold text-[var(--accent-ink)]">
+                      #{s.invoiceNumber}
+                    </Link>{" "}
+                    {s.customer?.name || "Walk-in"}
+                    {s.edited && <span className="badge badge-over ml-2">Edited</span>}
+                  </>
+                }
+                sub={`${paymentLabel(s)}, ${s.createdBy?.name || ""}${s.commissionAgent ? `, comm: ${s.commissionAgent.name}` : ""}`}
+                meta={`${formatDateTime(s.createdAt)}, bill ${s.dailyBillNumber ?? "—"}`}
+                amount={formatMoney(s.total)}
+                amountSub={adjustmentText(s)}
+              />
+            ))}
+          </PhoneList>
+        </div>
       ) : (
         <div className="grain-card overflow-x-auto">
           <table className="w-full text-sm min-w-[720px]">
@@ -157,7 +177,10 @@ const Invoices = () => {
                       <span className="block text-xs text-[var(--color-wheat-dark)]">Comm: {s.commissionAgent.name}</span>
                     )}
                   </td>
-                  <td className="py-2.5 px-4 text-right font-semibold">{formatMoney(s.total)}</td>
+                  <td className="py-2.5 px-4 text-right">
+                    <span className="font-semibold">{formatMoney(s.total)}</span>
+                    {adjustmentText(s) && <span className="block text-xs text-[var(--ink-muted)]">{adjustmentText(s)}</span>}
+                  </td>
                 </tr>
               ))}
               {!sales.length && (

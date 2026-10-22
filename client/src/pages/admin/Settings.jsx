@@ -57,8 +57,8 @@ const Section = ({ title, hint, action, children }) => (
 const Row = ({ title, sub, children }) => (
   <div className="flex items-center justify-between gap-3 py-2.5 text-sm">
     <div className="min-w-0">
-      <p className="font-medium truncate">{title}</p>
-      {sub && <p className="text-xs text-[var(--ink-muted)] truncate">{sub}</p>}
+      <p className="font-medium break-words">{title}</p>
+      {sub && <p className="text-xs text-[var(--ink-muted)] break-all">{sub}</p>}
     </div>
     <div className="flex items-center gap-1 shrink-0">{children}</div>
   </div>

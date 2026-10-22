@@ -10,7 +10,7 @@ import CommissionAgent from "../models/CommissionAgent.js";
 import { nextSequence } from "../models/Counter.js";
 import { asyncHandler } from "../middleware/errorHandler.js";
 import { takeFromKhula, giveBackToKhula } from "../utils/khulaPools.js";
-import { kgText } from "../utils/changeLog.js";
+import { kgText, rs } from "../utils/changeLog.js";
 import { accountProblem } from "../utils/accountCheck.js";
 
 // Applies the stock/khula-effects of a set of sale items (used on create and on revert).
@@ -220,6 +220,29 @@ const agentProblem = async (agentId, currentId) => {
   return "";
 };
 
+// The bill price before any discount: same sums as applyItemEffects, worked out from the request
+// so the amount received can be checked before anything is changed.
+const requestSubtotal = (items) =>
+  items.reduce(
+    (sum, i) =>
+      sum +
+      (i.itemType === "khula"
+        ? (Number(i.quantityGrams || 0) / 1000) * Number(i.pricePerUnit || 0)
+        : Number(i.quantityBori || 0) * Number(i.pricePerUnit || 0)),
+    0
+  );
+
+const isGiven = (value) => value !== undefined && value !== null && value !== "";
+
+// Cash and online bills record what the customer actually paid: a little less is a discount, a
+// little more is extra, and the bill's profit follows it. Catches amounts that look like a typo.
+const receivedProblem = (amountReceived, subtotal) => {
+  const value = Number(amountReceived);
+  if (!Number.isFinite(value) || value <= 0) return "Enter the amount received";
+  if (value > subtotal * 2) return `Amount received (${rs(value)}) is much more than the bill (${rs(subtotal)}). Check it.`;
+  return "";
+};
+
 const snapshotOf = (sale, action, changedBy, note) => ({
   items: sale.items,
   paymentType: sale.paymentType,
@@ -237,11 +260,16 @@ const snapshotOf = (sale, action, changedBy, note) => ({
 });
 
 export const createSale = asyncHandler(async (req, res) => {
-  const { items, paymentType, customerId, newCustomer, rideCost, commissionAgentId, paymentMethod, accountId } =
+  const { items, paymentType, customerId, newCustomer, rideCost, commissionAgentId, paymentMethod, accountId, amountReceived } =
     req.body;
   if (!items || !items.length) return res.status(400).json({ message: "At least one item is required" });
   if (!["cash", "credit"].includes(paymentType)) {
     return res.status(400).json({ message: "Payment type must be cash or credit" });
+  }
+  const hasReceived = paymentType === "cash" && isGiven(amountReceived);
+  if (hasReceived) {
+    const problem = receivedProblem(amountReceived, requestSubtotal(items));
+    if (problem) return res.status(400).json({ message: problem });
   }
   const agentError = await agentProblem(commissionAgentId);
   if (agentError) return res.status(400).json({ message: agentError });
@@ -272,10 +300,11 @@ export const createSale = asyncHandler(async (req, res) => {
   const preparedItems = await applyItemEffects(items, req.user._id, 1);
   const subtotal = preparedItems.reduce((sum, i) => sum + i.total, 0);
   const costOfGoods = preparedItems.reduce((sum, i) => sum + i.itemCost, 0);
-  const total = subtotal; // Ride is never charged to the customer.
+  // The sale is recorded at what was received (ride is never charged to the customer).
+  const total = hasReceived ? Number(amountReceived) : subtotal;
   const rideCostValue = Number(rideCost || 0);
 
-  const profitBeforeCommission = subtotal - costOfGoods - rideCostValue;
+  const profitBeforeCommission = total - costOfGoods - rideCostValue;
   const { commissionAgent, commissionPercent, commissionAmount } = await computeCommission(
     commissionAgentId,
     profitBeforeCommission
@@ -361,7 +390,7 @@ export const getSale = asyncHandler(async (req, res) => {
 // Salesman/admin can fix mistakes: rice type, quantity, price, customer, ride cost, commission.
 // Reverts old stock/khula/balance effects, snapshots the pre-edit state, then reapplies fresh.
 export const updateSale = asyncHandler(async (req, res) => {
-  const { items, paymentType, customerId, newCustomer, rideCost, commissionAgentId, paymentMethod, accountId, editNote } =
+  const { items, paymentType, customerId, newCustomer, rideCost, commissionAgentId, paymentMethod, accountId, editNote, amountReceived } =
     req.body;
   const sale = await Sale.findById(req.params.id).populate("customer", "name");
   if (!sale) return res.status(404).json({ message: "Invoice not found" });
@@ -381,6 +410,13 @@ export const updateSale = asyncHandler(async (req, res) => {
 
   // Check everything first, so an edit that can't go through changes nothing.
   const newPaymentType = paymentType || sale.paymentType;
+  const hasReceived = newPaymentType === "cash" && isGiven(amountReceived);
+  if (hasReceived) {
+    const problem = receivedProblem(amountReceived, requestSubtotal(newItems));
+    if (problem) return res.status(400).json({ message: problem });
+  }
+  // This bill's discount (−) or extra (+) before the edit; kept when the edit gives no new amount.
+  const oldAdjustment = sale.paymentType === "cash" ? (sale.total || 0) - (sale.subtotal || 0) : 0;
   let customerIdToUse = null;
   if (newPaymentType === "credit") {
     if (customerId) {
@@ -438,10 +474,12 @@ export const updateSale = asyncHandler(async (req, res) => {
   const preparedItems = await applyItemEffects(newItems, req.user._id, 1);
   const subtotal = preparedItems.reduce((sum, i) => sum + i.total, 0);
   const costOfGoods = preparedItems.reduce((sum, i) => sum + i.itemCost, 0);
-  const total = subtotal;
+  // Cash/online bills: the amount received given in the edit, or else the same discount/extra as before.
+  const keptTotal = subtotal + oldAdjustment;
+  const total = newPaymentType === "cash" ? (hasReceived ? Number(amountReceived) : keptTotal > 0 ? keptTotal : subtotal) : subtotal;
   const rideCostValue = Number(rideCost ?? sale.rideCost ?? 0);
 
-  const profitBeforeCommission = subtotal - costOfGoods - rideCostValue;
+  const profitBeforeCommission = total - costOfGoods - rideCostValue;
   const newCommissionAgentId = commissionAgentId !== undefined ? commissionAgentId : sale.commissionAgent;
   const { commissionAgent, commissionPercent, commissionAmount } = await computeCommission(
     newCommissionAgentId,
